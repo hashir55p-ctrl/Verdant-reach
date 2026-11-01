@@ -37,7 +37,12 @@ function send(req, res, q) {
     const room = rooms.get(code); if (!room || !room.has(id)) return;
     let m; try { m = JSON.parse(body); } catch (e) { return; }
     if (m.t === 's' && Array.isArray(m.s) && m.s.length >= 4) {
-      const s = m.s.slice(0, 7).map(Number); room.get(id).s = s; others(room, id, {t:'s', id, s});
+      const s = m.s.slice(0, 9).map(Number); room.get(id).s = s; others(room, id, {t:'s', id, s});
+    } else if (m.t === 'ev') {
+      const d = m.d && JSON.stringify(m.d).length < 600 ? m.d : null; if (!d) return;
+      const to = m.to ? clean(m.to, 12) : '';
+      if (to) { const t = room.get(to); if (t) sse(t.res, {t:'ev', from: id, d}); }
+      else others(room, id, {t:'ev', from: id, d});
     } else if (m.t === 'sig') {
       const to = clean(m.to, 12), t = room.get(to);
       if (t) sse(t.res, {t:'sig', from: id, to, d: m.d});
