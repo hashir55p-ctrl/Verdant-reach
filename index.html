@@ -1498,6 +1498,22 @@ async function build(){
   for(const [cx,cz,r,alt,col,n] of [[-30,40,70,48,'#2c2c32',5],[170,-150,90,60,'#2c2c32',4],[-20,330,60,26,'#f2f2f0',6],[250,170,60,36,'#4a4a50',4],[-250,150,80,70,'#6a5a46',3]]){
     for(let i=0;i<n;i++)spawnBird(cx,cz,r+(i%3)*6,alt+(i%4)*2.5,0.16+rand()*0.05,i*0.55+rand()*0.3,col);
   }
+  const BK={
+    eagle:{sz:1.5,body:'#5a4028',wing:'#4a3420',head:'#f1eee6',beak:'#e0b030',tail:'#f1eee6',ws:1.25},
+    parrot:{sz:0.7,body:'#d8281e',wing:'#1e5ec8',head:'#e63a28',beak:'#f2eadc',tail:'#1e9a54',ws:0.8},
+    gull:{sz:0.95,body:'#f4f4f2',wing:'#9aa2aa',head:'#f4f4f2',beak:'#e8b030',tail:'#f4f4f2',ws:1.1},
+    crow:{sz:0.9,body:'#1c1c22',wing:'#14141a',head:'#1c1c22',beak:'#3a3a40',tail:'#14141a',ws:1}
+  };
+  function spawnBird2(kind,cx,cz,r,alt,w,ph){
+    const k=BK[kind],S=k.sz;
+    const B=new Mesher();B.add(gSph,k.body,0,0,0,0.11*S,0.1*S,0.3*S,0,0,0);B.add(gSph,k.head,0,0.04*S,0.3*S,0.065*S,0.06*S,0.075*S,0,0,0);
+    B.add(gBox,k.beak,0,0.03*S,0.39*S,0.02*S,0.02*S,0.07*S,-0.25,0,0);B.add(gBox,k.tail,0,0.01*S,-0.36*S,0.12*S,0.012*S,0.2*S,0,0,0);
+    const mk=sd=>{const m=new Mesher();m.add(gBox,k.wing,sd*0.4*S*k.ws,0,0,0.8*S*k.ws,0.022*S,0.3*S,0,0,0);m.add(gBox,k.body,sd*0.12*S,0.005,0,0.24*S,0.026*S,0.3*S,0,0,0);return m.mesh(bMat)};
+    const g=new THREE.Group(),bm=B.mesh(bMat),w1=mk(1),w2=mk(-1);bm.castShadow=w1.castShadow=w2.castShadow=false;
+    g.add(bm,w1,w2);g.visible=false;scene.add(g);birds.push({g,w1,w2,cx,cz,r,alt,w,ph,flap:kind==='eagle'||kind==='gull'?4:11});
+  }
+  for(const [kind,cx,cz,r,alt,n] of [['eagle',-260,150,60,85,2],['eagle',170,-150,70,80,2],['eagle',60,-330,80,90,1],['gull',-20,330,90,24,6],['gull',-380,40,50,22,4],['gull',380,-60,50,22,4],['parrot',250,170,40,18,5],['parrot',230,-90,40,16,3],['crow',-30,40,50,30,4],['crow',-120,-200,60,34,4]])
+    for(let i=0;i<n;i++)spawnBird2(kind,cx,cz,r+(i%3)*5,alt+(i%4)*1.8,(0.10+((i*37)%11)*0.006)*(i%2?1:-1)*(kind==='parrot'?1.5:1),i*0.7+cx*0.01);
   extraTick.push((T,dt,cam)=>{
     const W=Date.now()/1000;
     for(const b of birds){
@@ -1505,8 +1521,8 @@ async function build(){
       const dx=x-cam.x,dz=z-cam.z;
       if(dx*dx+dz*dz>420*420){b.g.visible=false;continue}
       b.g.visible=true;b.g.position.set(x,b.alt+Math.sin(W*0.7+b.ph*3)*2.2,z);
-      b.g.rotation.y=Math.atan2(-Math.sin(th),Math.cos(th))+0;b.g.rotation.z=0.18;
-      const f=Math.sin(W*7+b.ph*5)*0.55;b.w1.rotation.z=f;b.w2.rotation.z=-f;
+      b.g.rotation.y=Math.atan2(-Math.sin(th),Math.cos(th))+(b.w<0?Math.PI:0);b.g.rotation.z=0.18;
+      const f=Math.sin(W*(b.flap||7)+b.ph*5)*(b.flap===4?0.4:0.55);b.w1.rotation.z=f;b.w2.rotation.z=-f;
     }
   });
   /* ================= things to find, hold, eat and give ================= */
@@ -2999,7 +3015,7 @@ async function build(){
   }
   applyTime();
   frame();
-  window.__verdant={animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
+  window.__verdant={birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
   $('#veil').classList.add('gone');
 }
 
