@@ -98,6 +98,16 @@ h1{font-size:clamp(2.3rem,11vw,4.6rem)}
 #emotes button{display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--line);background:rgba(10,24,34,.5);color:var(--text);border-radius:14px;padding:9px 0 8px;cursor:pointer;touch-action:manipulation}
 #emotes button:active{background:var(--sun);color:var(--sun-ink)}
 .ee{font-size:26px;line-height:1}.en{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+#micBtn[aria-pressed="true"]{background:#2fa66b;border-color:#7be0a8;color:#04170d;opacity:1}
+@media (orientation:landscape) and (max-height:560px){
+  .topbtns{gap:6px}.pill{padding:10px 13px;font-size:10.5px}
+  #emotes{bottom:12px;right:calc(env(safe-area-inset-right,0px) + 150px);grid-template-columns:repeat(3,70px);gap:6px;padding:8px}
+  #emotes button{padding:6px 0}
+  #intro{align-items:center}.card{max-width:46rem;max-height:calc(100dvh - 20px);padding:14px 18px}
+  h1{font-size:clamp(1.9rem,8vh,3rem)}.lede{display:none}
+  .maker{grid-template-columns:150px minmax(0,1fr)}#pv{width:150px;height:190px}
+  #tip{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+}
 #emoji{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);font-size:84px;pointer-events:none;opacity:0;z-index:7}
 #emoji.pop{animation:pop 1.3s ease-out}
 @keyframes pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.5)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-90%) scale(1)}}
@@ -135,8 +145,9 @@ h1{font-size:clamp(2.3rem,11vw,4.6rem)}
       <div class="row"><span id="hdg">N 000°</span><span id="alt">Alt 6 m</span><span id="clock">Morning 07:48</span></div>
     </div>
     <div class="topbtns">
+      <button id="viewBtn" class="ctl pill glass" type="button" aria-pressed="true" aria-label="Switch camera view">3rd person</button>
       <button id="timeBtn" class="ctl pill glass" type="button" aria-label="Jump to the next time of day">Time</button>
-      <button id="micBtn" class="ctl pill glass off" type="button" aria-pressed="false" aria-label="Toggle your microphone">Mic</button>
+      <button id="micBtn" class="ctl pill glass off" type="button" aria-pressed="false" aria-label="Toggle your microphone">Mic off</button>
       <button id="invBtn" class="ctl pill glass off" type="button" aria-label="Invite friends">Invite</button>
       <button id="soundBtn" class="ctl pill glass" type="button" aria-pressed="true" aria-label="Toggle ambient sound">Sound</button>
     </div>
@@ -933,7 +944,7 @@ async function build(){
   }
   function setFly(on){
     if(on===flying)return;
-    if(on){flying=true;py=camera.position.y;fvy=0}
+    if(on){flying=true;py=eyeV.y||camera.position.y;fvy=0}
     else{flying=false;off=Math.max(0,py-1.7-groundAt(P.x,P.z));gS=groundAt(P.x,P.z);vy=0}
     $('#flyBtn').setAttribute('aria-pressed',String(on));
   }
@@ -974,7 +985,9 @@ async function build(){
       eye=gS+off+1.7+Math.sin(bobT*2)*0.035*clamp(sp2/5,0,1.6);
     }
     camera.position.set(P.x,eye,P.z);
+    eyeV.copy(camera.position);
     camera.rotation.set(pitch,yaw,0);
+    if(tpp)applyTPP();
   }
 
   /* input */
@@ -1365,10 +1378,11 @@ async function build(){
     }catch(e){}
   }
   const micBtn=$('#micBtn');
+  function setMic(on){micBtn.setAttribute('aria-pressed',String(on));micBtn.textContent=on?'Mic on':'Mic off'}
   micBtn.addEventListener('click',async()=>{
     if(voice.track){
       voice.track.enabled=!voice.track.enabled;
-      micBtn.setAttribute('aria-pressed',String(voice.track.enabled));
+      setMic(voice.track.enabled);
       setTip(voice.track.enabled?'Mic on — people nearby can hear you.':'Mic muted.');return;
     }
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setTip('Voice chat needs microphone access, which this page cannot use here.');return}
@@ -1376,7 +1390,7 @@ async function build(){
       voice.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
       voice.track=voice.stream.getAudioTracks()[0];
       for(const r of remotes.values())if(r.tr)r.tr.sender.replaceTrack(voice.track).catch(()=>{});
-      micBtn.setAttribute('aria-pressed','true');
+      setMic(true);
       setTip('Mic on — people nearby can hear you. Tap Mic to mute.');
       if(vctx&&vctx.state==='suspended')vctx.resume();
     }catch(e){
@@ -1393,6 +1407,45 @@ async function build(){
   });
 
 
+
+  /* third-person camera + own avatar */
+  const eyeV=new THREE.Vector3();
+  let tpp=true;try{const v=localStorage.getItem('vr.tpp');if(v!==null)tpp=v==='1'}catch(e){}
+  let tpDist=0,myAv=null,myAvKey='',myPh=0,myBub=null;
+  function applyTPP(){
+    const cp=Math.cos(pitch),dx=-Math.sin(yaw)*cp,dy=Math.sin(pitch),dz=-Math.cos(yaw)*cp,rx=Math.cos(yaw),rz=-Math.sin(yaw);
+    const dist=flying?6:3.8;let t=dist;
+    for(let k=0;k<9;k++){
+      const f=t/dist,px=eyeV.x-dx*t+rx*0.5*f,py2=eyeV.y+0.3-dy*t,pz=eyeV.z-dz*t+rz*0.5*f;
+      if(py2>Math.max(heightAt(px,pz),-0.9)+0.5)break;t*=0.8;
+    }
+    const f=t/dist;tpDist=t;
+    camera.position.set(eyeV.x-dx*t+rx*0.5*f,eyeV.y+0.3-dy*t,eyeV.z-dz*t+rz*0.5*f);
+  }
+  function setView(on){
+    tpp=on;try{localStorage.setItem('vr.tpp',on?'1':'0')}catch(e){}
+    const b=$('#viewBtn');b.setAttribute('aria-pressed',String(on));b.textContent=on?'3rd person':'1st person';
+    if(!on&&myAv)myAv.visible=false;
+  }
+  $('#viewBtn').addEventListener('click',()=>setView(!tpp));
+  setView(tpp);
+  window.addEventListener('keydown',e=>{if(mode==='walk'&&!e.repeat&&e.code==='KeyV'){const t=e.target&&e.target.tagName;if(t!=='INPUT')setView(!tpp)}});
+  function updateMyAvatar(dt){
+    const key=JSON.stringify(cleanProf(me));
+    if(!myAv||myAvKey!==key){if(myAv){scene.remove(myAv)}myAv=makeAvatar(me);myAvKey=key;myBub=null;scene.add(myAv)}
+    myAv.visible=tpp&&tpDist>1.2;
+    if(!myAv.visible)return;
+    const sp=Math.hypot(vx,vz);myPh+=sp*dt*1.9;
+    const amt=Math.min(1,sp/3.5),sw=Math.sin(myPh)*0.75*amt;
+    const gid=sp>1.2?0:myG,po=poseAvatar(myAv,gid,myGT,sw,amt);
+    myAv.position.set(eyeV.x,eyeV.y-1.7+po.oy,eyeV.z);myAv.rotation.y=yaw+po.yo;
+    if(gid){
+      if(!myBub){myBub=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,depthWrite:false,fog:false,toneMapped:false}));myBub.scale.set(0.62,0.62,1);myBub.renderOrder=10;myAv.add(myBub)}
+      const e=GEST[gid].e;if(myBub.userData.e!==e){myBub.userData.e=e;myBub.material.map=bubbleFor(e);myBub.material.needsUpdate=true}
+      myBub.position.y=(gid===5?1.55:2.0)+0.62;myBub.visible=true;
+    }else if(myBub)myBub.visible=false;
+  }
+
   /* per-frame */
   let netAcc=0,vT=0,rlT=0,myG=0,myGT=0;
   const emBox=$('#emotes'),emBtn=$('#emoBtn');
@@ -1405,7 +1458,8 @@ async function build(){
   }
   window.addEventListener('keydown',e=>{if(mode!=='walk'||e.repeat)return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;const m=/^Digit([1-6])$/.exec(e.code);if(m)doGesture(+m[1])});
   function netTick(dt){
-    const cx=camera.position.x,cz=camera.position.z;
+    if(mode==='walk')updateMyAvatar(dt);
+    const cx=eyeV.x,cz=eyeV.z;
     for(const r of remotes.values()){
       if(r.fresh)continue;
       const k=1-Math.exp(-dt*9),ox=r.x,oz=r.z;
@@ -1437,14 +1491,14 @@ async function build(){
     if(myG){myGT+=dt;if(Math.hypot(vx,vz)>0.8||jumpHeld||(myG!==5&&GEST[myG].d&&myGT>GEST[myG].d))myG=0}
     if(net.bk&&mode==='walk'){
       netAcc+=dt;
-      if(netAcc>=0.1){netAcc=0;net.bk.setState([+cx.toFixed(2),+(camera.position.y-1.7).toFixed(2),+cz.toFixed(2),+yaw.toFixed(3),+hours.toFixed(3),myT0,myG])}
+      if(netAcc>=0.1){netAcc=0;net.bk.setState([+cx.toFixed(2),+(eyeV.y-1.7).toFixed(2),+cz.toFixed(2),+yaw.toFixed(3),+hours.toFixed(3),myT0,myG])}
     }
   }
 
   function enter(){
     mode='walk';
     P.x=0;P.z=0;yaw=0.667;pitch=-0.04;vx=vz=vy=0;off=0;gS=groundAt(0,0);
-    camera.position.set(0,gS+1.7,0);camera.rotation.set(pitch,yaw,0);
+    camera.position.set(0,gS+1.7,0);eyeV.copy(camera.position);camera.rotation.set(pitch,yaw,0);
     sun.castShadow=true;
     $('#intro').classList.add('gone');$('#hud').classList.add('on');
     setTimeout(()=>{$('#tip').classList.add('off')},7000);
@@ -1457,6 +1511,8 @@ async function build(){
     try{localStorage.setItem('vr.room',code)}catch(e){}
     if(window.__closePreview)window.__closePreview();
     enter();
+    try{if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{})}catch(e){}
+    try{if(matchMedia('(orientation: portrait)').matches)setTip('Tip: turn your device sideways (landscape) for the best view.')}catch(e){}
     if(code)await openNet(code,me);
   }
   try{const u=new URLSearchParams(location.search).get('room');const rv=u||localStorage.getItem('vr.room')||'';$('#rm').value=rv.slice(0,16)}catch(e){}
