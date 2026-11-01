@@ -250,6 +250,15 @@ function heightAt(x,z){
   const c=1-smooth(0,95,d);
   h=lerp(h,5.5+n*5,c*0.95);
   h+=fbm(x*0.035+80,z*0.035-20,3)*1.7;
+
+  /* Smaller landforms add natural variation without changing the island silhouette. */
+  const ridgeNoise=fbm(x*0.018-64,z*0.018+31,4);
+  const ridges=1-Math.abs(ridgeNoise);
+  const ridgeMask=smooth(12,34,h)*(1-smooth(42,58,h));
+  h+=Math.pow(ridges,2.2)*5.5*ridgeMask;
+  const fineDetail=fbm(x*0.075+17,z*0.075-43,3);
+  h+=fineDetail*1.05*smooth(2,12,h);
+
   const ld=Math.hypot(x-LAKE.x,z-LAKE.z);
   h=lerp(h,-5,1-smooth(LAKE.r*0.35,LAKE.r,ld));
   h=lerp(h,-14,smooth(0.55*R,0.98*R,d));
