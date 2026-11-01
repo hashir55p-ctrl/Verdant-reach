@@ -338,7 +338,7 @@ button{font-family:inherit}
       <button id="jumpBtn" class="ctl rb big glass" type="button" aria-label="Jump, or rise while flying"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span>Jump</span></button></div>
     </div>
     <div id="grabHint" class="glass off"></div>
-    <div id="bag" class="off" role="dialog" aria-label="Your collection"><div class="bbox"><div class="bhead"><h2>Collection</h2><span id="bagProg"></span><button id="bagX" type="button" aria-label="Close">✕</button></div><div id="bagTabs"><button type="button" data-t="fruit">🍎 Fruits</button><button type="button" data-t="thing">🪵 Things</button></div><div id="bagGrid"></div><div id="bagAct"></div></div></div>
+    <div id="bag" class="ctl off" role="dialog" aria-label="Your collection"><div class="bbox"><div class="bhead"><h2>Collection</h2><span id="bagProg"></span><button id="bagX" type="button" aria-label="Close">✕</button></div><div id="bagTabs"><button type="button" data-t="fruit">🍎 Fruits</button><button type="button" data-t="thing">🪵 Things</button></div><div id="bagGrid"></div><div id="bagAct"></div></div></div>
     <div id="emotes" class="ctl glass off" role="menu" aria-label="Gestures"></div>
     <div id="emoji" aria-hidden="true"></div>
     <p id="tip" class="glass"></p>
@@ -1764,7 +1764,7 @@ async function build(){
     document.querySelectorAll('#bagTabs button').forEach(b=>b.addEventListener('click',()=>{bagTab=b.dataset.t;bagSel=0;bagUI()}));
     $('#grabBtn').addEventListener('click',grab);
     window.addEventListener('keydown',e=>{if(mode!=='walk'||e.repeat)return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;
-      if(e.code==='KeyE')grab();else if(e.code==='KeyB'){$('#bag').classList.contains('off')?openBag():closeBag()}});
+      if(e.code==='Escape'&&!$('#bag').classList.contains('off')){closeBag();return}if(e.code==='KeyE')grab();else if(e.code==='KeyB'){$('#bag').classList.contains('off')?openBag():closeBag()}});
   })();
 
   const extrasTick=(T,dt)=>{for(const f of extraTick)f(T,dt,camera.position)};
