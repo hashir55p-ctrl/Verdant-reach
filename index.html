@@ -1242,8 +1242,8 @@ async function build(){
     for(let k=0;k<4;k++){
       const a=k*Math.PI/4,cx=Math.cos(a)*0.72,cz=Math.sin(a)*0.72,b=P.length/3;
       const q=[[-1,0,0,0],[1,0,1,0],[1,1,1,1],[-1,1,0,1]];
-      const bladeHeight=[0.78,0.96,1.12,0.88][k];
-      const bladeLean=[-0.08,0.04,0.1,-0.03][k];
+      const bladeHeight=[0.62,0.78,0.92,0.70][k];
+      const bladeLean=[-0.11,0.05,0.14,-0.06][k];
       for(const e of q){P.push(cx*e[0]+bladeLean*e[1],e[1]*bladeHeight,cz*e[0]);N.push(0,1,0);Uv.push(e[2],e[3]);const s=0.62+0.38*e[1];Cc.push(s,s,s)}
       I.push(b,b+1,b+2,b,b+2,b+3);
     }
@@ -1256,16 +1256,16 @@ async function build(){
   const CAP=7600;
   const grassA=inst(grassGeo,mkGrassMat(false),CAP),grassB=inst(grassGeo,mkGrassMat(true),CAP);
   grassA.setColorAt(0,new THREE.Color(1,1,1));grassB.setColorAt(0,new THREE.Color(1,1,1));grassA.count=0;grassB.count=0;scene.add(grassA);scene.add(grassB);
-  const GR=46,GC=0.95,gcache=new Map();
+  const GR=46,GC=1.18,gcache=new Map();
   function cellAt(ix,iz){
     const key=(ix+1000)*4096+(iz+1000);
     if(gcache.has(key))return gcache.get(key);
     let e=null;
     const x=(ix+hn(ix,iz,1))*GC,z=(iz+hn(ix,iz,2))*GC;
     const h=heightAt(x,z);
-    if(h>=1.6&&h<=26&&slopeAt(x,z)<=0.62&&!(forestMask(x,z)>0.3&&hn(ix,iz,3)>0.4)&&Math.hypot(x,z)<R&&zoneW(DESERT,x,z)<0.3&&zoneW(FROST,x,z)<0.35){
+    if(h>=1.6&&h<=26&&slopeAt(x,z)<=0.62&&hn(ix,iz,10)>0.18&&!(forestMask(x,z)>0.3&&hn(ix,iz,3)>0.4)&&Math.hypot(x,z)<R&&zoneW(DESERT,x,z)<0.3&&zoneW(FROST,x,z)<0.35){
       const flowerPatch=fbm(x*0.045+300,z*0.045,2)>0.08;
-      e={x,z,y:h,s:0.8+hn(ix,iz,4)*0.8,ry:hn(ix,iz,5)*6.28,b:flowerPatch&&hn(ix,iz,6)<0.6,
+      e={x,z,y:h,s:0.68+hn(ix,iz,4)*0.66,ry:hn(ix,iz,5)*6.28,b:flowerPatch&&hn(ix,iz,6)<0.6,
          r:0.82+hn(ix,iz,7)*0.3,g:0.92+hn(ix,iz,8)*0.14,bl:0.7+hn(ix,iz,9)*0.25};
     }
     gcache.set(key,e);return e;
