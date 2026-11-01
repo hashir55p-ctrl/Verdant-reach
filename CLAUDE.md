@@ -18,5 +18,10 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 - Voice is a WebRTC audio mesh signalled through the same relay (`sig` messages). Remote volume falls off with distance.
 - After changing `index.html`, commit; Render redeploys automatically. Installed copies may need to be closed and reopened to pick up the new version.
 
+## World (v2 big world)
+- Island radius `R=520`, terrain `SIZE=1200`. Regions: Sunscar Desert, Mistmarsh swamp, Frostfields (see `DESERT`, `SWAMP`, `FROST`, `zoneW`), two rivers (`RIVERS`), flat building `SITES` (towns, ruins, camp, lighthouse) that `heightAt` flattens.
+- `heightRaw` is the terrain; `heightAt` adds the flat sites. Everything in the world must be deterministic (seeded `rand`, `hn`) so all players see the same world; animals and birds move on clock-based loops for the same reason.
+- Buildings/props are merged into a few meshes with the `Mesher` class (keep draw calls low for phones). Debug helpers on `window.__verdant`: `fly`, `look`, `dbg`.
+
 ## Ideas not built yet
 Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek, weather, saved rooms, TURN server for voice on strict networks.
