@@ -14,7 +14,7 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 ## Rules for changes
 - Keep it zero-dependency and flat: no build step, no subfolders (server.js only serves root-level files and hides server.js, package.json, README.md, package-lock.json).
 - Avatars are built from primitive geometry in `makeAvatar(pf)`. A player profile is a small object (`n`, `g`, `sk`, `ha`, `st`, `tp`, `tc`, `bt`, `bc`, `sh`, `gl`, `bp`, `bd`, `bl`, `ht`) sanitised by `cleanProf`; add new fields to `DEF`/`LEN` there so old saved profiles and remote peers stay valid.
-- Player state is sent about 10 times a second as `[x, y, z, yaw, hours, t0, gestureId]`; the server keeps the first 7 entries. The host (smallest `t0`) controls time of day.
+- Player state is sent about 10 times a second as `[x, y, z, yaw, hours, t0, gestureId, heldCode]`; the server keeps the first 9 entries. One-off events (item taken, animal picked up, gift given) go as `{t:'ev'}` messages relayed by the server. The host (smallest `t0`) controls time of day.
 - Voice is a WebRTC audio mesh signalled through the same relay (`sig` messages). Remote volume falls off with distance.
 - After changing `index.html`, commit; Render redeploys automatically. Installed copies may need to be closed and reopened to pick up the new version.
 
@@ -22,6 +22,10 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 - Island radius `R=520`, terrain `SIZE=1200`. Regions: Sunscar Desert, Mistmarsh swamp, Frostfields (see `DESERT`, `SWAMP`, `FROST`, `zoneW`), two rivers (`RIVERS`), flat building `SITES` (towns, ruins, camp, lighthouse) that `heightAt` flattens.
 - `heightRaw` is the terrain; `heightAt` adds the flat sites. Everything in the world must be deterministic (seeded `rand`, `hn`) so all players see the same world; animals and birds move on clock-based loops for the same reason.
 - Buildings/props are merged into a few meshes with the `Mesher` class (keep draw calls low for phones). Debug helpers on `window.__verdant`: `fly`, `look`, `dbg`.
+
+## Items, bag, accounts
+- Items/fruit/bag module sits just before `extrasTick` in `index.html` (`ITEMS`, `bag`, `grab`, `syncHeld`, `itemGesture`). Small animals (`small:true`) can be picked up. Bag is saved in localStorage `vr.bag`.
+- Optional Google sign-in: set env `GOOGLE_CLIENT_ID` on the host (Web client ID, authorised origin = site URL). `/auth/config`, `/auth/google`, `/auth/me`, `/auth/save` in `server.js`; accounts stored in `accounts.json` (set `DATA_DIR` to a persistent disk; free Render disk is ephemeral).
 
 ## Ideas not built yet
 Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek, weather, saved rooms, TURN server for voice on strict networks.

@@ -239,6 +239,14 @@ button{font-family:inherit}
 #soundBtn::after{content:"On";font:600 15px/1 var(--display)}#soundBtn[aria-pressed="false"]::after{content:"Off"}
 #timeBtn::after{content:"Next ›";font:600 15px/1 var(--display)}
 </style>
+<style id="ui4">
+.acct{margin-top:14px;display:flex;align-items:center;gap:10px;min-height:40px;flex-wrap:wrap}
+.acct .who{display:flex;align-items:center;gap:8px;font:600 13px system-ui;color:var(--text)}
+.acct img{width:30px;height:30px;border-radius:50%;object-fit:cover}
+.acct button{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;font:600 12.5px system-ui}
+.acct .note{font:500 11.5px system-ui;opacity:.65}
+@media (max-height:520px){.acct{margin-top:6px}}
+</style>
 <style id="ui3">
 .col2{display:flex;flex-direction:column;align-items:center;gap:10px}
 #grabBtn{width:64px;height:64px}
@@ -278,6 +286,7 @@ button{font-family:inherit}
         <h1>Verdant<span>Reach</span></h1>
         <p class="lede">Make your explorer, then wander the island alone or share a room code with friends.</p>
         <div class="chips"><i>2–8 players</i><i>Voice chat</i><i>Day &amp; night</i></div>
+        <div id="acct" class="acct"></div>
       </header>
       <div class="card">
         <div class="maker">
@@ -2539,6 +2548,7 @@ async function build(){
     }catch(e){pvR=null}
     window.__closePreview=()=>{cancelAnimationFrame(pvRAF);if(pvR){try{pvR.dispose();pvR.forceContextLoss()}catch(e){}pvR=null}};
     window.__pick=(k,v)=>{me[k]=v;refresh()};
+    window.__refreshMaker=()=>refresh();
     refresh();
   })();
 
@@ -2940,6 +2950,7 @@ async function build(){
   }
   async function startGame(){
     me=cleanProf(me);try{localStorage.setItem('vr.me',JSON.stringify(me))}catch(e){}
+    if(window.__acct)window.__acct.save();
     const code=($('#rm').value||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,16);
     try{localStorage.setItem('vr.room',code)}catch(e){}
     if(window.__closePreview)window.__closePreview();
@@ -2948,6 +2959,50 @@ async function build(){
     try{if(matchMedia('(orientation: portrait)').matches)setTip('Tip: turn your device sideways (landscape) for the best view.')}catch(e){}
     if(code)await openNet(code,me);
   }
+
+  /* ---- accounts: guest by default, optional Google sign-in (server needs GOOGLE_CLIENT_ID) ---- */
+  (function(){
+    const box=$('#acct');if(!box)return;
+    let tok=null,user=null,cid='',saveT=0;try{tok=localStorage.getItem('vr.tok')}catch(e){}
+    const api=(p,o)=>fetch(p,Object.assign({headers:Object.assign({'Content-Type':'application/json'},tok?{Authorization:'Bearer '+tok}:{})},o)).then(r=>r.ok?r.json():Promise.reject(r.status));
+    function applyUser(u){
+      user=u;
+      if(u.profile){me=Object.assign(me,cleanProf(u.profile));if(window.__refreshMaker)window.__refreshMaker()}
+      else if(u.name&&(!me.n||me.n==='Traveller')){me.n=cleanProf({n:u.name}).n;if(window.__refreshMaker)window.__refreshMaker()}
+      const I=window.__items;
+      if(I&&u.bag&&u.bag.n){for(const k in u.bag.n)I.bag.n[k]=Math.max(I.bag.n[k]||0,u.bag.n[k]|0);for(const k in (u.bag.seen||{}))I.bag.seen[k]=1;try{localStorage.setItem('vr.bag',JSON.stringify(I.bag))}catch(e){}}
+      render();
+    }
+    function signOut(){tok=null;user=null;try{localStorage.removeItem('vr.tok')}catch(e){}render()}
+    function render(){
+      box.innerHTML='';
+      if(user){
+        const w=document.createElement('div');w.className='who';
+        if(user.picture){const im=document.createElement('img');im.alt='';im.referrerPolicy='no-referrer';im.src=user.picture;w.appendChild(im)}
+        const t=document.createElement('span');t.textContent='Signed in as '+user.name;w.appendChild(t);box.appendChild(w);
+        const b=document.createElement('button');b.type='button';b.textContent='Sign out';b.addEventListener('click',signOut);box.appendChild(b);
+      }else if(cid){
+        const g=document.createElement('div');g.id='gbtn';box.appendChild(g);
+        const n=document.createElement('span');n.className='note';n.textContent='or just play as a guest';box.appendChild(n);
+        if(window.google&&google.accounts&&google.accounts.id)google.accounts.id.renderButton(g,{theme:'outline',size:'medium',shape:'pill',text:'signin_with'});
+      }else{
+        const n=document.createElement('span');n.className='note';n.textContent='Playing as a guest · Google sign-in is not set up on this server yet';box.appendChild(n);
+      }
+    }
+    function initGoogle(){
+      const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.async=true;
+      sc.onload=()=>{try{google.accounts.id.initialize({client_id:cid,callback:r=>{
+        api('/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}).then(u=>{tok=u.token;try{localStorage.setItem('vr.tok',tok)}catch(e){}applyUser(u);save()}).catch(()=>setTip('Google sign-in failed. Try again.'))}});render()}catch(e){}};
+      document.head.appendChild(sc);
+    }
+    function save(){
+      if(!tok)return;clearTimeout(saveT);
+      saveT=setTimeout(()=>{const I=window.__items;api('/auth/save',{method:'POST',body:JSON.stringify({profile:cleanProf(me),bag:I?I.bag:undefined})}).catch(s=>{if(s===401)signOut()})},700);
+    }
+    window.__acct={save};
+    render();
+    api('/auth/config').then(c=>{cid=c.clientId||'';if(cid){render();initGoogle();if(tok)api('/auth/me').then(applyUser).catch(s=>{if(s===401)signOut()})}}).catch(()=>{});
+  })();
   try{const u=new URLSearchParams(location.search).get('room');const rv=u||localStorage.getItem('vr.room')||'';$('#rm').value=rv.slice(0,16)}catch(e){}
   $('#enterBtn').addEventListener('click',startGame);
   (function(){
