@@ -541,8 +541,10 @@ async function build(){
   sun.castShadow=false;
   const SM=isTouch?1024:2048;
   sun.shadow.mapSize.set(SM,SM);
-  const sc=sun.shadow.camera;sc.left=-64;sc.right=64;sc.top=64;sc.bottom=-64;sc.near=10;sc.far=420;
-  sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.5;
+  const sc=sun.shadow.camera;sc.left=-52;sc.right=52;sc.top=52;sc.bottom=-52;sc.near=2;sc.far=360;
+  sc.updateProjectionMatrix();
+  /* Tighter shadow coverage and a smaller normal offset keep tree shadows grounded. */
+  sun.shadow.bias=-0.00018;sun.shadow.normalBias=0.045;sun.shadow.radius=2;
   scene.add(sun);scene.add(sun.target);
 
   /* Graphics profiles: let mobile players trade visual detail for smoother frame rates. */
@@ -811,7 +813,7 @@ async function build(){
     if(slopeAt(x,z)>0.75)continue;
     if(rand()>smooth(-0.05,0.25,forestMask(x,z))*0.9+0.03)continue;
     const pine=rand()<(th>18?0.9:0.35);
-    trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,pine,v:rand()<0.5?0:1});
+    trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,leanX:(rand()-0.5)*0.045,leanZ:(rand()-0.5)*0.045,crownX:pine?0.92+rand()*0.16:0.84+rand()*0.32,crownZ:pine?0.92+rand()*0.16:0.84+rand()*0.32,pine,v:rand()<0.5?0:1});
   }
   const pineGeos=[buildPine(11,9,1.8,9.2,3.2,9),buildPine(23,8,1.6,8.0,2.8,9)];
   const broadGeos=[buildBroad(5,3.0,2.5,3.0,5.4,56,2.4),buildBroad(9,2.6,3.2,2.6,5.8,54,2.3)];
@@ -826,7 +828,7 @@ async function build(){
     const list=groups[gi],geo=gi<2?pineGeos[gi]:broadGeos[gi-2];
     const m=inst(geo,mat,Math.max(1,list.length));m.count=list.length;
     list.forEach((t,ix)=>{
-      put(m,ix,t.x,t.h-0.4,t.z,t.s,t.s*(0.92+rand()*0.2),t.s,0,t.ry,0);
+      put(m,ix,t.x,t.h-0.4,t.z,t.s*t.crownX,t.s*(0.92+rand()*0.2),t.s*t.crownZ,t.leanX,t.ry,t.leanZ);
       if(t.pine)tc.setHSL(0.33+rand()*0.04,0.42+rand()*0.12,0.29+rand()*0.08);
       else{
         const g=groveMask(t.x,t.z);
@@ -841,7 +843,7 @@ async function build(){
   });
   [[pineTr,pineTrunkGeo],[broadTr,broadTrunkGeo]].forEach(([list,geo])=>{
     const m=inst(geo,barkMat,Math.max(1,list.length));m.count=list.length;
-    list.forEach((t,ix)=>put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,0,t.ry,0));
+    list.forEach((t,ix)=>put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,t.leanX,t.ry,t.leanZ));
     m.castShadow=true;m.receiveShadow=true;fin(m);
   });
 
@@ -871,10 +873,12 @@ async function build(){
   say('Sowing the meadows');await tick();
   function tuftGeo(){
     const P=[],N=[],Uv=[],Cc=[],I=[];
-    for(let k=0;k<3;k++){
-      const a=k*Math.PI/3,cx=Math.cos(a)*0.65,cz=Math.sin(a)*0.65,b=P.length/3;
+    for(let k=0;k<4;k++){
+      const a=k*Math.PI/4,cx=Math.cos(a)*0.72,cz=Math.sin(a)*0.72,b=P.length/3;
       const q=[[-1,0,0,0],[1,0,1,0],[1,1,1,1],[-1,1,0,1]];
-      for(const e of q){P.push(-cx*e[0]*0.0+cx*e[0],e[1]*0.9,cz*e[0]);N.push(0,1,0);Uv.push(e[2],e[3]);const s=0.62+0.38*e[1];Cc.push(s,s,s)}
+      const bladeHeight=[0.78,0.96,1.12,0.88][k];
+      const bladeLean=[-0.08,0.04,0.1,-0.03][k];
+      for(const e of q){P.push(cx*e[0]+bladeLean*e[1],e[1]*bladeHeight,cz*e[0]);N.push(0,1,0);Uv.push(e[2],e[3]);const s=0.62+0.38*e[1];Cc.push(s,s,s)}
       I.push(b,b+1,b+2,b,b+2,b+3);
     }
     const g=new THREE.BufferGeometry();
