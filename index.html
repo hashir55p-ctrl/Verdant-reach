@@ -401,7 +401,7 @@ function leafCanvas(){
     g.strokeStyle='rgba(255,255,255,0.2)';g.lineWidth=1;g.beginPath();g.moveTo(0,-1);g.lineTo(0,-len*0.9);g.stroke();
     g.restore();
   }
-  for(let i=0;i<190;i++){
+  for(let i=0;i<250;i++){ // richer leaf detail while keeping the atlas compact
     const a=r()*Math.PI*2,rr=Math.sqrt(r())*86;
     leaf(128+Math.cos(a)*rr,128+Math.sin(a)*rr,r()*Math.PI*2,24+r()*12,6.5+r()*4,i<80?120+r()*50:170+r()*80);
   }
@@ -411,7 +411,7 @@ function pineCanvas(){
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d'),r=mulberry32(91);
   g.strokeStyle='rgb(150,125,105)';g.lineWidth=3;g.beginPath();g.moveTo(128,256);g.lineTo(128,6);g.stroke();
-  for(let i=0;i<360;i++){
+  for(let i=0;i<440;i++){ // denser pine-needle texture
     const t=r(),y=250-t*236,side=r()<0.5?-1:1;
     const len=(1-t*0.55)*(50+r()*34),ang=(35+r()*40)*Math.PI/180;
     const s=Math.round(110+r()*120);
@@ -858,8 +858,9 @@ async function build(){
     const pine=zf>0.3?rand()<0.95:rand()<(th>18?0.9:0.35);
     trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,leanX:(rand()-0.5)*0.045,leanZ:(rand()-0.5)*0.045,crownX:pine?0.92+rand()*0.16:0.84+rand()*0.32,crownZ:pine?0.92+rand()*0.16:0.84+rand()*0.32,pine,v:rand()<0.5?0:1});
   }
-  const pineGeos=[buildPine(11,9,1.8,9.2,3.2,9),buildPine(23,8,1.6,8.0,2.8,9)];
-  const broadGeos=[buildBroad(5,3.0,2.5,3.0,5.4,56,2.4),buildBroad(9,2.6,3.2,2.6,5.8,54,2.3)];
+  const pineGeos=[buildPine(11,10,1.8,9.2,3.2,11),buildPine(23,9,1.6,8.0,2.8,11)];
+  // More overlapping, differently oriented foliage cards give canopies a fuller 3D silhouette.
+  const broadGeos=[buildBroad(5,3.0,2.5,3.0,5.4,88,2.4),buildBroad(9,2.6,3.2,2.6,5.8,84,2.3)];
   const wobble=(g,amp,h)=>{const p=g.attributes.position;for(let i=0;i<p.count;i++){const y=p.getY(i);p.setX(i,p.getX(i)+Math.sin(y*1.1+1)*amp*(y/h));}return g};
   const broadTrunkGeo=wobble(new THREE.CylinderGeometry(0.16,0.42,5.4,8,4,true).translate(0,2.7,0),0.25,5.4);
   const pineTrunkGeo=new THREE.CylinderGeometry(0.05,0.34,10,7,1,true).translate(0,5,0);
