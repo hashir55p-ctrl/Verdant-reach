@@ -174,6 +174,7 @@ h1{font-size:clamp(2.3rem,11vw,4.6rem)}
       <button id="micBtn" class="ctl pill glass off" type="button" aria-pressed="false" aria-label="Toggle your microphone">Mic off</button>
       <button id="invBtn" class="ctl pill glass off" type="button" aria-label="Invite friends">Invite</button>
       <button id="soundBtn" class="ctl pill glass" type="button" aria-pressed="true" aria-label="Toggle ambient sound">Sound</button>
+      <button id="gfxBtn" class="ctl pill glass" type="button" aria-label="Change graphics quality">Graphics: Balanced</button>
     </div>
     <div id="stick" class="ctl glass" aria-label="Movement stick"><div id="nub"></div></div>
     <div class="actions">
@@ -534,6 +535,28 @@ async function build(){
   const sc=sun.shadow.camera;sc.left=-64;sc.right=64;sc.top=64;sc.bottom=-64;sc.near=10;sc.far=420;
   sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.5;
   scene.add(sun);scene.add(sun.target);
+
+  /* Graphics profiles: let mobile players trade visual detail for smoother frame rates. */
+  const gfxBtn=$('#gfxBtn');
+  let gfxMode='balanced';
+  try{const saved=localStorage.getItem('vr.graphics');if(saved==='performance'||saved==='balanced'||saved==='quality')gfxMode=saved}catch(e){}
+  function applyGraphics(mode){
+    gfxMode=mode;
+    const touch=!!isTouch;
+    maxPR=mode==='performance'?(touch?1:1.25):mode==='quality'?(touch?1.5:2):(touch?1.25:1.5);
+    pr=maxPR;
+    renderer.shadowMap.enabled=mode!=='performance';
+    sun.castShadow=mode!=='performance';
+    if(gfxBtn)gfxBtn.textContent='Graphics: '+(mode==='performance'?'Performance':mode==='quality'?'Quality':'Balanced');
+    resize();
+  }
+  if(gfxBtn)gfxBtn.addEventListener('click',()=>{
+    const modes=['performance','balanced','quality'];
+    const next=modes[(modes.indexOf(gfxMode)+1)%modes.length];
+    applyGraphics(next);
+    try{localStorage.setItem('vr.graphics',next)}catch(e){}
+  });
+  applyGraphics(gfxMode);
   const moon=new THREE.DirectionalLight(0x8fa8ff,0);scene.add(moon);
 
   /* sky */
@@ -1696,7 +1719,7 @@ async function build(){
     mode='walk';
     P.x=0;P.z=0;yaw=0.667;pitch=-0.04;vx=vz=vy=0;off=0;gS=groundAt(0,0);
     camera.position.set(0,gS+1.7,0);eyeV.copy(camera.position);camera.rotation.set(pitch,yaw,0);
-    sun.castShadow=true;
+    applyGraphics(gfxMode);
     $('#intro').classList.add('gone');$('#hud').classList.add('on');
     setTimeout(()=>{$('#tip').classList.add('off')},7000);
     canvas.focus({preventScroll:true});
