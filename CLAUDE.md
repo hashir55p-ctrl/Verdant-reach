@@ -25,6 +25,7 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 
 ## Items, bag, accounts
 - Items/fruit/bag module sits just before `extrasTick` in `index.html` (`ITEMS`, `bag`, `grab`, `syncHeld`, `itemGesture`). Small animals (`small:true`) can be picked up. Bag is saved in localStorage `vr.bag`.
+- Camp/fish module (after the items module): `buildFire`/`makeCampfire` (3 sticks, 15 min, synced by `ev` fire), `COOK` map, `castNow`/`reelIn` fishing (rod id 29, fish ids 50-57, cooked 60-62), animals log `bag.an`, swimming fish instanced mesh. Sounds: `critter`, `stepSnd`, sea waves in the audio section.
 - Optional Google sign-in: set env `GOOGLE_CLIENT_ID` on the host (Web client ID, authorised origin = site URL). `/auth/config`, `/auth/google`, `/auth/me`, `/auth/save` in `server.js`; accounts stored in `accounts.json` (set `DATA_DIR` to a persistent disk; free Render disk is ephemeral).
 
 ## Ideas not built yet

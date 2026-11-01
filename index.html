@@ -338,7 +338,7 @@ button{font-family:inherit}
       <button id="jumpBtn" class="ctl rb big glass" type="button" aria-label="Jump, or rise while flying"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span>Jump</span></button></div>
     </div>
     <div id="grabHint" class="glass off"></div>
-    <div id="bag" class="ctl off" role="dialog" aria-label="Your collection"><div class="bbox"><div class="bhead"><h2>Collection</h2><span id="bagProg"></span><button id="bagX" type="button" aria-label="Close">✕</button></div><div id="bagTabs"><button type="button" data-t="fruit">🍎 Fruits</button><button type="button" data-t="thing">🪵 Things</button></div><div id="bagGrid"></div><div id="bagAct"></div></div></div>
+    <div id="bag" class="ctl off" role="dialog" aria-label="Your collection"><div class="bbox"><div class="bhead"><h2>Collection</h2><span id="bagProg"></span><button id="bagX" type="button" aria-label="Close">✕</button></div><div id="bagTabs"><button type="button" data-t="fruit">🍎 Food</button><button type="button" data-t="thing">🪵 Things</button><button type="button" data-t="fish">🐟 Fish</button><button type="button" data-t="animal">🐾 Animals</button></div><div id="bagGrid"></div><div id="bagAct"></div></div></div>
     <div id="emotes" class="ctl glass off" role="menu" aria-label="Gestures"></div>
     <div id="emoji" aria-hidden="true"></div>
     <p id="tip" class="glass"></p>
@@ -1481,7 +1481,7 @@ async function build(){
       const hf=heightAt(po1[0]+fx,po1[1]+fz),hb=heightAt(po1[0]-fx,po1[1]-fz);
       a.g.position.set(po1[0],Math.max((hf+hb)*0.5,-0.25),po1[1]);
       a.g.rotation.y=yaw;a.g.rotation.x=Math.atan2(hb-hf,1.2)*0.9;a.g.scale.setScalar(a.sc);
-      const bs=a.bs,lb=a.d.legBones,ph=W*(2.6+sp*1.3),amp=Math.min(0.7,sp*0.45),moving=Math.min(1,sp*1.6);
+      const bs=a.bs,lb=a.d.legBones,ph=W*(2.6+sp*1.3),amp=Math.min(0.7,sp*0.45),moving=Math.min(1,sp*1.6);a.mv=moving;
       const sps=SPECIES[a.kind],nl=lb.length;
       for(let i=0;i<nl;i++){
         const pi=sps.hop?(i>1?0.5:0):(nl===2?(i?Math.PI:0):PH[i]);const s=Math.sin(sps.hop?ph*1.4+pi:ph+pi),c=Math.cos(sps.hop?ph*1.4+pi:ph+pi);
@@ -1577,7 +1577,20 @@ async function build(){
   def(26,'Flower','🌼','thing',0,'A little wildflower.',()=>{const o=[[IC(5),'#3f8a2e',[0,0.1,0],[0.006,0.22,0.006]]];for(let i=0;i<6;i++){const a=i*1.047;o.push([IS(6,4),'#f0a0c0',[Math.cos(a)*0.035,0.21,Math.sin(a)*0.035],[0.026,0.012,0.026]])}o.push([IS(6,4),'#f2cf3a',[0,0.212,0],[0.02,0.014,0.02]]);return o});
   def(27,'Sword','⚔️','tool',0,'A worn but sharp blade.',()=>[[new THREE.BoxGeometry(1,1,1),'#cfd4dc',[0,0.32,0],[0.04,0.5,0.01]],[new THREE.BoxGeometry(1,1,1),'#8a6a2a',[0,0.07,0],[0.14,0.022,0.03]],[IC(6),'#4a2f1a',[0,0.0,0],[0.014,0.1,0.014]],[IS(6,4),'#d8b04a',[0,-0.055,0],[0.022,0.022,0.022]]]);
   def(28,'Crystal','💎','thing',0,'Glows faintly. Rare.',()=>[[ICone(6),'#6fd0ff',[0,0.1,0],[0.05,0.12,0.05]],[ICone(6),'#4fb4f0',[0,-0.02,0],[0.05,0.1,0.05],[Math.PI,0,0]],[ICone(5),'#8fe0ff',[0.05,0.04,0.02],[0.025,0.08,0.025],[0,0,-0.4]]]);
-  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23],THING_IDS=[20,21,22,24,25,26,27,28];
+  const fishP=(c1,c2,L,belly)=>()=>[[IS(10,8),c1,[0,0.04,0],[L,L*0.3,L*0.17]],[IS(8,6),belly||c1,[0.01*L,0.015,0],[L*0.85,L*0.2,L*0.15]],[ICone(4),c2,[-L*1.05,0.04,0],[L*0.34,L*0.42,0.012],[0,0,Math.PI/2]],[IS(5,4),c2,[0,0.04+L*0.3,0],[L*0.3,L*0.18,0.01]],[IS(5,4),'#101010',[L*0.78,0.06,L*0.12],[0.012,0.012,0.012]]];
+  def(29,'Fishing Rod','🎣','tool',0,'Face the water, cast, and press Grab when it bites.',()=>[[IC(5),'#6b4a2a',[0,0.4,0],[0.011,0.8,0.011]],[IC(6),'#2a2a2a',[0,0.04,0],[0.02,0.16,0.02]],[IS(7,5),'#b0b4ba',[0.03,0.14,0],[0.03,0.03,0.014]]]);
+  def(50,'Sardine','🐟','fish',0,'Small and silvery. Sea.',fishP('#9fb4c4','#6f8696',0.1,'#dfe8ee'));
+  def(51,'Mackerel','🐟','fish',0,'Striped and quick. Sea.',fishP('#3f6f8a','#2d5268',0.15,'#cfe0e8'));
+  def(52,'Tuna','🐟','fish',0,'A big, rare sea fish.',fishP('#2f4a66','#223850',0.23,'#c8d4de'));
+  def(53,'Trout','🐟','fish',0,'Speckled river fish.',fishP('#8a9a5a','#6a7a40',0.14,'#e0d8a8'));
+  def(54,'Carp','🐟','fish',0,'Slow and golden-brown.',fishP('#b08a4a','#8a6a34',0.16,'#e6d2a0'));
+  def(55,'Catfish','🐟','fish',0,'Whiskered. Lives in the swamp.',fishP('#5a5448','#443e34',0.17,'#8a8272'));
+  def(56,'Salmon','🐟','fish',0,'Pink and strong. Cold rivers.',fishP('#d0786a','#a85a4e',0.18,'#f2c0b4'));
+  def(57,'Golden Koi','🐠','fish',0,'A legend. Very rare.',fishP('#f0b030','#e08a20',0.17,'#fff0b0'));
+  def(60,'Grilled Fish','🍣','food',1,'Hot from the fire.',()=>[[IS(10,8),'#a0642a',[0,0.04,0],[0.16,0.05,0.04]],[ICone(4),'#7a4a20',[-0.17,0.04,0],[0.05,0.07,0.012],[0,0,Math.PI/2]],[IC(5),'#6b4a2a',[0,0.04,0],[0.006,0.5,0.006],[0,0,Math.PI/2]],[IS(5,4),'#2a1a10',[0.08,0.045,0.01],[0.1,0.012,0.045]]]);
+  def(61,'Roast Mushroom','🍄','food',1,'Smoky and savoury.',()=>[[IC(6),'#d8c8a0',[0,0.04,0],[0.028,0.08,0.028]],[IS(),'#7a4a2a',[0,0.1,0],[0.09,0.055,0.09]]]);
+  def(62,'Baked Apple','🍎','food',1,'Soft and warm.',()=>[[IS(),'#8a3a1a',[0,0,0],[0.11,0.09,0.11]],stem(0.09)]);
+  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23,60,61,62],THING_IDS=[20,21,22,24,25,26,27,28,29],FISH_IDS=[50,51,52,53,54,55,56,57];
   const itemMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.62,metalness:0});
   for(const id in ITEMS){const it=ITEMS[id];it.geo=cgeo(it.parts())}
   /* where things lie */
@@ -1630,8 +1643,8 @@ async function build(){
   const nowS=()=>performance.now()/1000;
   function takeItem(it,respawn){it.alive=false;it.back=respawn?nowS()+240:0;itemUpd(it)}
   /* collection (bag) */
-  const bag={n:{},seen:{}};
-  try{const sv=JSON.parse(localStorage.getItem('vr.bag')||'null');if(sv&&sv.n){bag.n=sv.n;bag.seen=sv.seen||{}}}catch(e){}
+  const bag={n:{},seen:{},an:{}};
+  try{const sv=JSON.parse(localStorage.getItem('vr.bag')||'null');if(sv&&sv.n){bag.n=sv.n;bag.seen=sv.seen||{};bag.an=sv.an||{}}}catch(e){}
   let heldSel=0,heldAnimal=-1;
   const saveBag=()=>{try{localStorage.setItem('vr.bag',JSON.stringify(bag))}catch(e){}if(window.__acct&&window.__acct.save)window.__acct.save(bag)};
   function addBag(id,n=1){bag.n[id]=Math.max(0,(bag.n[id]||0)+n);if(n>0)bag.seen[id]=1;saveBag();bagUI()}
@@ -1663,7 +1676,7 @@ async function build(){
     if((bag.n[t]||0)<1)heldSel=0;bagUI();return true;
   }
   function releaseAnimal(a,x,z){const W=Date.now()/1000;a.hx=x-a.ax*Math.sin(a.w1*W+a.p1);a.hz=z-a.az*Math.sin(a.w2*W+a.p2);a.taken=false}
-  function grab(){cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else pickUp(cand);cand=findCand();hintUI()}
+  function grab(){if(typeof fishing!=='undefined'&&fishing){reelIn();return}cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else pickUp(cand);cand=findCand();hintUI()}
   function hintUI(){
     const h=$('#grabHint'),gb=$('#grabBtn');if(!h)return;
     let t='';
@@ -1680,6 +1693,7 @@ async function build(){
     else if(d.k==='gtake'){const a=animals[d.a|0];if(a)a.taken=true}
     else if(d.k==='gput'){const a=animals[d.a|0];if(a)releaseAnimal(a,+d.x,+d.z)}
     else if(d.k==='knock'){const it=items[d.i|0];if(it&&it.hang){it.hang=false;it.fall=0.001}}
+    else if(d.k==='fire'){buildFire(d.x,d.z,d.e,d.u)}
     else if(d.k==='give'&&d.to===myId){const t=d.t|0;if(ITEMS[t]){addBag(t,1);const r=remotes.get(from);toast((r?r.pf.n:'A friend')+' gave you '+ITEMS[t].e+' '+ITEMS[t].n)}}
   }
   window.__items={onEv,items,bag,grab,findCand,addBag,ITEMS,get held(){return heldSel},hold(i){heldSel=i}};
@@ -1700,6 +1714,9 @@ async function build(){
     if(myG===9&&t>1.5){gEff.done=true;const id=heldSel;if(heldAnimal<0&&id&&ITEMS[id]&&ITEMS[id].eat&&(bag.n[id]||0)>0){addBag(id,-1);if((bag.n[id]||0)<1)heldSel=0;critter('crunch',0.25,0);toast('Yum! '+ITEMS[id].e+' '+ITEMS[id].n)}else toast('Nothing to eat in your hand')}
     else if(myG===8&&t>0.55){gEff.done=true;if(!dropHeld(true))toast('Nothing to throw')}
     else if(myG===10&&t>0.7){gEff.done=true;giveNearest()}
+    else if(myG===16&&t>1.2){gEff.done=true;drinkNow()}
+    else if(myG===17&&t>0.75){gEff.done=true;castNow()}
+    else if(myG===18&&t>1.8){gEff.done=true;cookNow()}
     else if(myG===7&&t>0.5){
       gEff.done=true;let n=0;const px=eyeV.x,pz=eyeV.z;
       for(const it of items){if(n>=3)break;if(!it.alive||!it.hang)continue;if(Math.hypot(it.x-px,it.z-pz)<4){it.hang=false;it.fall=0.001;sendEv(null,{k:'knock',i:it.i});n++}}
@@ -1727,7 +1744,8 @@ async function build(){
   let bagTab='fruit',bagSel=0;
   function bagUI(){
     const g=$('#bagGrid');if(!g)return;
-    const ids=bagTab==='fruit'?FRUIT_IDS:THING_IDS;
+    if(bagTab==='animal')return animalTab();
+    const ids=bagTab==='fruit'?FRUIT_IDS:bagTab==='fish'?FISH_IDS:THING_IDS;
     const found=ids.filter(i=>bag.seen[i]).length;
     $('#bagProg').textContent=found+' of '+ids.length+' found';
     document.querySelectorAll('#bagTabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===bagTab)));
@@ -1746,6 +1764,9 @@ async function build(){
       const mk=(t,fn,cls)=>{const b=document.createElement('button');b.type='button';b.textContent=t;if(cls)b.className=cls;b.addEventListener('click',fn);row.appendChild(b)};
       if(n>0){
         mk(heldSel===id&&heldAnimal<0?'Put away':'Hold',()=>{if(heldAnimal>=0){toast('Put the animal down first');return}heldSel=heldSel===id?0:id;bagUI()},'pri');
+        if(id===20)mk('🔥 Build campfire',()=>{closeBag();makeCampfire()});
+        if(COOK[id])mk('🍳 Cook',()=>{heldSel=id;setGesture(18);closeBag()});
+        if(id===29)mk('🎣 Cast',()=>{heldSel=29;setGesture(17);closeBag()});
         if(it.eat)mk('Eat',()=>{if(heldAnimal>=0)return;heldSel=id;setGesture(9);closeBag()});
         mk('Drop',()=>{if(heldAnimal>=0)return;heldSel=id;dropHeld(false);bagUI()});
         const ppl=nearbyPeople();
@@ -1767,6 +1788,133 @@ async function build(){
       if(e.code==='Escape'&&!$('#bag').classList.contains('off')){closeBag();return}if(e.code==='KeyE')grab();else if(e.code==='KeyB'){$('#bag').classList.contains('off')?openBag():closeBag()}});
   })();
 
+  /* ================= camp fire, cooking, drinking, fishing, animal log ================= */
+  const isWater=(x,z)=>heightAt(x,z)<-0.15;
+  const nowMs=()=>Date.now();
+  /* rods lie around */
+  for(const [S,n] of [[WM,3],[SV('Lighthouse'),2],[HC,1],[DR,1]]){if(!S)continue;for(let k=0;k<n;k++){const a=IR()*6.28,r=S.r*(0.3+IR()*0.5),x=S.x+Math.cos(a)*r,z=S.z+Math.sin(a)*r;if(heightAt(x,z)>0.5)addItem(29,x,heightAt(x,z),z,false)}}
+  /* animals log */
+  if(!bag.an)bag.an={};
+  const ANI_LIST=[['deer','Deer','🦌'],['doe','Doe','🦌'],['camel','Camel','🐪'],['wolf','Wolf','🐺'],['sheep','Sheep','🐑'],['rabbit','Rabbit','🐇'],['chicken','Chicken','🐔'],['duck','Duck','🦆'],['hedgehog','Hedgehog','🦔'],['fox','Fox','🦊'],['kit','Fox kit','🦊'],['eagle','Eagle','🦅'],['parrot','Parrot','🦜'],['gull','Seagull','🕊️'],['crow','Crow','🐦‍⬛']];
+  function spot(kind){if(bag.an[kind])return;bag.an[kind]=1;const r=ANI_LIST.find(q=>q[0]===kind);saveBag();bagUI();if(r)toast('New animal: '+r[2]+' '+r[1]+' — added to your collection')}
+  let spotAcc=0;
+  extraTick.push((T,dt,cam)=>{
+    spotAcc+=dt;if(spotAcc<0.6)return;spotAcc=0;
+    for(const a of animals){if(a.taken||!a.g.visible||bag.an[a.kind])continue;if(Math.hypot(a.g.position.x-cam.x,a.g.position.z-cam.z)<22)spot(a.kind)}
+    for(const b of birds){if(!b.kind||!b.g.visible||bag.an[b.kind])continue;if(Math.hypot(b.g.position.x-cam.x,b.g.position.z-cam.z)<45)spot(b.kind)}
+  });
+  function animalTab(){
+    const g=$('#bagGrid');const found=ANI_LIST.filter(q=>bag.an[q[0]]).length;
+    $('#bagProg').textContent=found+' of '+ANI_LIST.length+' seen';
+    document.querySelectorAll('#bagTabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===bagTab)));
+    g.innerHTML='';
+    for(const [k,n,e] of ANI_LIST){const s=bag.an[k];const b=document.createElement('div');b.className='bc'+(s?'':' lock');b.innerHTML='<span class="be">'+(s?e:'?')+'</span><span class="bn">'+(s?n:'???')+'</span>';g.appendChild(b)}
+    const A=$('#bagAct');A.innerHTML='<div class="bdesc"><span>Walk close to an animal or bird to add it. Small ones can also be picked up.</span></div>';
+  }
+  /* campfires */
+  const fires=[];
+  const glowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,2,32,32,32);g.addColorStop(0,'rgba(255,190,90,0.9)');g.addColorStop(0.5,'rgba(255,120,30,0.35)');g.addColorStop(1,'rgba(255,100,20,0)');x.fillStyle=g;x.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);return t})();
+  const fMatA=new THREE.MeshBasicMaterial({color:0xff5a10,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false});
+  const fMatB=new THREE.MeshBasicMaterial({color:0xff9a20,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false});
+  const smokeMat=new THREE.MeshBasicMaterial({color:0x777777,transparent:true,opacity:0.25,depthWrite:false});
+  const stoneMat=new THREE.MeshStandardMaterial({color:0x7d7f83,roughness:1}),logMat=new THREE.MeshStandardMaterial({color:0x5a3d24,roughness:1}),coalMat=new THREE.MeshBasicMaterial({color:0xff5a18});
+  function buildFire(x,z,until,uid){
+    if(uid&&fires.some(f=>f.uid===uid))return;
+    while(fires.length>=10){const f=fires.shift();scene.remove(f.g)}
+    const y=Math.max(0,heightAt(x,z)),g=new THREE.Group();g.position.set(x,y,z);
+    for(let i=0;i<8;i++){const a=i*0.785,m=new THREE.Mesh(IS(6,5),stoneMat);m.position.set(Math.cos(a)*0.62,0.1,Math.sin(a)*0.62);m.scale.set(0.24,0.17,0.2);g.add(m)}
+    {const ash=new THREE.Mesh(new THREE.CircleGeometry(0.85,16),new THREE.MeshBasicMaterial({color:0x2a2420}));ash.rotation.x=-Math.PI/2;ash.position.y=0.04;g.add(ash)}
+    for(let i=0;i<3;i++){const m=new THREE.Mesh(IC(6),logMat);m.scale.set(0.09,1.1,0.09);m.position.y=0.14;m.rotation.set(0,i*1.05,Math.PI/2);g.add(m)}
+    const co=new THREE.Mesh(IS(8,6),coalMat);co.scale.set(0.5,0.08,0.5);co.position.y=0.1;g.add(co);
+    const fl=[];for(let i=0;i<4;i++){const m=new THREE.Mesh(ICone(7),i<2?fMatA:fMatB);m.position.set((i-1.5)*0.14,0.3,(i%2-0.5)*0.2);g.add(m);fl.push(m)}
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(5,5),new THREE.MeshBasicMaterial({map:glowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));gl.rotation.x=-Math.PI/2;gl.position.y=0.06;g.add(gl);
+    const sm=[];for(let i=0;i<4;i++){const m=new THREE.Mesh(IS(7,5),smokeMat);g.add(m);sm.push(m)}
+    scene.add(g);fires.push({g,fl,sm,gl,x,z,y,until,uid:uid||('f'+Math.random().toString(36).slice(2,8)),ph:Math.random()*9});
+  }
+  const nearFire=r=>fires.find(f=>f.until>nowMs()&&Math.hypot(f.x-eyeV.x,f.z-eyeV.z)<r);
+  function makeCampfire(){
+    if((bag.n[20]||0)<3){toast('You need 3 sticks to build a fire');return}
+    const [x,z]=placeAhead(1.9);if(isWater(x,z)){toast('Not on water');return}
+    addBag(20,-3);if((bag.n[20]||0)<1&&heldSel===20)heldSel=0;
+    const u='f'+Math.random().toString(36).slice(2,8),e=nowMs()+15*60000;buildFire(x,z,e,u);sendEv(null,{k:'fire',x,z,e,u});toast('🔥 Campfire lit! Cook food here. It burns for 15 minutes.');critter('crunch',0.2,0);
+  }
+  let crackT=0;
+  extraTick.push((T,dt,cam)=>{
+    for(let i=fires.length-1;i>=0;i--){
+      const f=fires[i];if(f.until<nowMs()){scene.remove(f.g);fires.splice(i,1);continue}
+      const d=Math.hypot(f.x-cam.x,f.z-cam.z);f.g.visible=d<140;if(d>=140)continue;
+      const left=Math.min(1,(f.until-nowMs())/20000);
+      f.fl.forEach((m,k)=>{const s=(0.8+0.35*Math.sin(T*9+k*2+f.ph)+0.15*Math.sin(T*23+k))*left;m.scale.set(0.22*(1+0.2*Math.sin(T*7+k)),1.0*s,0.22);m.position.y=0.12+0.5*s});
+      f.gl.material.opacity=0.55+0.25*Math.sin(T*11+f.ph);f.gl.scale.setScalar(left);
+      f.sm.forEach((m,k)=>{const p=((T*0.22+k*0.25+f.ph)%1);m.position.set(Math.sin(p*5+k)*0.15+p*0.4,1.1+p*3,Math.cos(p*4+k)*0.1);m.scale.setScalar(0.12+p*0.4);m.material.opacity=0.25*(1-p)});
+    }
+    crackT-=dt;if(crackT<0&&ac&&soundOn){crackT=0.12+Math.random()*0.35;const f=nearFire(22);if(f){const d=Math.hypot(f.x-cam.x,f.z-cam.z);nz(ac.currentTime+0.01,0.03+Math.random()*0.04,0.12*Math.pow(1-d/22,2),2500,Math.random()*0.6-0.3)}}
+  });
+  /* cooking */
+  const COOK={50:60,51:60,52:60,53:60,54:60,55:60,56:60,57:60,23:61,1:62};
+  function cookNow(){
+    const id=heldSel;
+    if(heldAnimal>=0||!id||!COOK[id]||(bag.n[id]||0)<1){toast('Hold something you can cook (fish, apple, mushroom)');return}
+    if(!nearFire(4)){toast('Stand next to a campfire first. Build one with 3 sticks.');return}
+    const o=COOK[id];addBag(id,-1);addBag(o,1);if((bag.n[id]||0)<1)heldSel=o;if(ac&&soundOn)nz(ac.currentTime+0.01,1.2,0.12,1500,0);toast('Cooked! '+ITEMS[o].e+' '+ITEMS[o].n+' — try the Eat gesture');
+  }
+  /* drinking */
+  function drinkNow(){
+    let w=isWater(eyeV.x,eyeV.z);for(const d of [0.8,1.5,2.4,3.4])if(w)break;else w=isWater(eyeV.x-Math.sin(yaw)*d,eyeV.z-Math.cos(yaw)*d);
+    if(w){if(ac&&soundOn){const t=ac.currentTime+0.02;for(let i=0;i<4;i++)tn(t+i*0.28,500+i*40,300,0.14,'sine',0.08,0)}toast('💧 Fresh water. Refreshing!')}
+    else if(heldSel===10&&(bag.n[10]||0)>0){addBag(10,-1);heldSel=0;toast('🥥 Coconut water. Sweet!')}
+    else toast('Face a river or the sea to drink');
+  }
+  /* fishing */
+  const bobber=new THREE.Group();{const b1=new THREE.Mesh(IS(8,6),new THREE.MeshBasicMaterial({color:0xe03a2a})),b2=new THREE.Mesh(IS(8,6),new THREE.MeshBasicMaterial({color:0xf4f4f0}));b1.scale.set(0.07,0.07,0.07);b1.position.y=0.04;b2.scale.set(0.06,0.06,0.06);b2.position.y=-0.03;bobber.add(b1,b2)}
+  bobber.visible=false;scene.add(bobber);
+  const lineGeo=new THREE.BufferGeometry();lineGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));
+  const lineObj=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xeeeeee}));lineObj.frustumCulled=false;lineObj.visible=false;scene.add(lineObj);
+  let fishing=null;
+  function stopFishing(){fishing=null;bobber.visible=false;lineObj.visible=false}
+  function castNow(){
+    if(heldSel!==29||heldAnimal>=0||(bag.n[29]||0)<1){toast('Hold a fishing rod first (open the bag)');return}
+    for(const d of [6.5,8,5,4,9.5]){const [x,z]=placeAhead(d);if(isWater(x,z)&&isWater(x,z)){fishing={x,z,ox:eyeV.x,oz:eyeV.z,t0:nowMs()/1000,bite:3+Math.random()*7,phase:'wait'};bobber.position.set(x,0.02,z);bobber.visible=true;lineObj.visible=true;if(ac&&soundOn)nz(ac.currentTime+0.3,0.25,0.12,900,0);toast('🎣 Cast! Wait for a bite…');return}}
+    toast('Face the water to cast');
+  }
+  function pickFish(x,z){
+    const R=Math.random();const rv=riverD(x,z)<RIVER_W*3&&Math.hypot(x,z)<R_ISL-70;
+    if(zoneW(SWAMP,x,z)>0.3)return R<0.6?55:R<0.9?54:53;
+    if(zoneW(FROST,x,z)>0.3)return R<0.6?56:R<0.95?53:57;
+    if(rv)return R<0.03?57:R<0.2?56:R<0.6?53:54;
+    return R<0.04?52:R<0.3?51:50;
+  }
+  const R_ISL=R;
+  function reelIn(){
+    const f=fishing;if(!f)return;
+    if(f.phase==='bite'){const id=pickFish(f.x,f.z);addBag(id,1);heldSel=heldSel||29;toast('🎣 Caught a '+ITEMS[id].e+' '+ITEMS[id].n+'!');if(ac&&soundOn){nz(ac.currentTime+0.01,0.5,0.15,800,0);tn(ac.currentTime+0.05,300,700,0.2,'sine',0.08,0)}stopFishing()}
+    else{toast('Too early — nothing yet');stopFishing()}
+  }
+  extraTick.push((T,dt,cam)=>{
+    if(!fishing)return;const f=fishing,now=nowMs()/1000,t=now-f.t0;
+    if(heldSel!==29||Math.hypot(eyeV.x-f.ox,eyeV.z-f.oz)>7||heldAnimal>=0){toast('The line went slack');stopFishing();return}
+    if(f.phase==='wait'){bobber.position.y=0.02+Math.sin(T*2)*0.012;if(t>f.bite){f.phase='bite';f.bt=now;toast('🐟 A bite! Press Grab now!');if(ac&&soundOn){nz(ac.currentTime+0.01,0.2,0.1,1000,0);tn(ac.currentTime+0.02,500,250,0.12,'sine',0.08,0)}}}
+    else{bobber.position.y=-0.04+Math.sin(T*30)*0.03;bobber.position.x=f.x+Math.sin(T*25)*0.05;if(now-f.bt>2.3){toast('It got away…');stopFishing();return}}
+    const ud=myAv&&myAv.userData;const tip=new THREE.Vector3(0,0.8,0);if(ud&&ud.hand&&myAv.visible){ud.hand.localToWorld(tip)}else tip.set(cam.x-Math.sin(yaw)*0.6,cam.y-0.5,cam.z-Math.cos(yaw)*0.6);
+    const p=lineGeo.attributes.position;p.setXYZ(0,tip.x,tip.y,tip.z);p.setXYZ(1,bobber.position.x,bobber.position.y+0.05,bobber.position.z);p.needsUpdate=true;
+  });
+  /* fish you can see swimming and jumping */
+  const FISHN=90,fishData=[];{const FR=mulberry32(5150);let k=0,tries=0;while(k<FISHN&&tries<9000){tries++;const a=FR()*6.28,r=Math.sqrt(FR())*540,x=Math.cos(a)*r,z=Math.sin(a)*r,h=heightAt(x,z);if(h>-0.6||h<-3.2)continue;fishData.push({x,z,r:1.5+FR()*3,sp:0.3+FR()*0.5,ph:FR()*6.28,per:16+FR()*26,sc:0.7+FR()*0.9,col:k%3});k++}}
+  const fishMesh=new THREE.InstancedMesh(ITEMS[50].geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.5}),FISHN);fishMesh.frustumCulled=false;fishMesh.count=0;scene.add(fishMesh);
+  const fdm=new THREE.Object3D();
+  extraTick.push((T,dt,cam)=>{
+    const W=nowMs()/1000;let n=0;
+    for(const f of fishData){
+      const th=W*f.sp+f.ph,x=f.x+Math.cos(th)*f.r,z=f.z+Math.sin(th)*f.r;
+      if((x-cam.x)*(x-cam.x)+(z-cam.z)*(z-cam.z)>3600)continue;
+      const q=((W+f.ph*5)%f.per)/f.per;let y=-0.28+Math.sin(W*2+f.ph)*0.03,pit=0;
+      if(q>0.965){const u=(q-0.965)/0.035;y=-0.3+Math.sin(u*Math.PI)*0.9;pit=Math.cos(u*Math.PI)*-0.8}
+      fdm.position.set(x,y,z);fdm.rotation.set(0,-th-Math.PI/2,pit,'YXZ');fdm.scale.setScalar(f.sc*1.1);fdm.updateMatrix();fishMesh.setMatrixAt(n++,fdm.matrix);
+    }
+    fishMesh.count=n;fishMesh.instanceMatrix.needsUpdate=true;
+  });
+
+  Object.assign(window.__items,{makeCampfire,castNow,reelIn,cookNow,drinkNow,fires,hold(i){heldSel=i},spot,isWater,fstate:()=>fishing&&fishing.phase});
   const extrasTick=(T,dt)=>{for(const f of extraTick)f(T,dt,camera.position)};
   const deckAt=(px,pz)=>{for(const b of BRIDGES){const dx=px-b.x,dz=pz-b.z,s=Math.sin(b.yaw),c=Math.cos(b.yaw),u=dx*s+dz*c,v=dx*c-dz*s;if(Math.abs(u)<b.L/2&&Math.abs(v)<1.6)return b.y}return -99};
 
@@ -1998,7 +2146,7 @@ async function build(){
   window.addEventListener('blur',()=>{keys.clear();jumpHeld=false});
 
   /* ambient sound */
-  let ac=null,master=null,windG=null,waterG=null,cricketG=null,soundOn=true,birdT=null;
+  let ac=null,master=null,windG=null,waterG=null,cricketG=null,seaG=null,soundOn=true,birdT=null;
   function noiseSrc(){
     const len=ac.sampleRate*2,buf=ac.createBuffer(1,len,ac.sampleRate),d=buf.getChannelData(0);let last=0;
     for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5}
@@ -2030,6 +2178,7 @@ async function build(){
       const cg=ac.createGain();cg.gain.value=0.5;const lfo=ac.createOscillator();lfo.type='square';lfo.frequency.value=11;
       const lg=ac.createGain();lg.gain.value=0.5;lfo.connect(lg);lg.connect(cg.gain);
       cricketG=ac.createGain();cricketG.gain.value=0;co.connect(cg);cg.connect(cricketG);cricketG.connect(master);co.start();lfo.start();
+      {const sq=noiseSrc(),sf=ac.createBiquadFilter();sf.type='lowpass';sf.frequency.value=900;seaG=ac.createGain();seaG.gain.value=0;const sw=ac.createGain();sw.gain.value=0.6;const lf=ac.createOscillator();lf.frequency.value=0.11;const lg=ac.createGain();lg.gain.value=0.4;lf.connect(lg);lg.connect(sw.gain);sq.connect(sf);sf.connect(sw);sw.connect(seaG);seaG.connect(master);sq.start();lf.start()}
       birdLoop();
     }catch(_){ac=null}
   }
@@ -2039,6 +2188,7 @@ async function build(){
     windG.gain.setTargetAtTime(0.035+0.05*clamp(alt/40,0,1)+0.02*(Math.sin(t*0.35)*0.5+0.5),now,0.4);
     waterG.gain.setTargetAtTime(0.06*smooth(5,0.5,groundH),now,0.5);
     cricketG.gain.setTargetAtTime(0.012*nightAmt,now,0.8);
+    if(seaG)seaG.gain.setTargetAtTime(0.09*smooth(R-130,R-20,Math.hypot(eyeV.x,eyeV.z)),now,0.6);
   }
   /* ---- animal and bird voices (synthesised, louder when close) ---- */
   function tn(t,f0,f1,d,type,v,pan,bp,vib){
@@ -2092,6 +2242,51 @@ async function build(){
     };
     for(const a of animals)if(!a.taken&&a.g.visible)go(a,a.kind,a.g.position.x,a.g.position.z,0,a.kind==='wolf'?90:55);
     for(const b of birds)if(b.kind&&b.g.visible)go(b,b.kind,b.g.position.x,b.g.position.z,0,b.kind==='eagle'?120:70);
+  });
+  /* ---- footsteps, animal steps and sea waves ---- */
+  function surfaceAt(x,z){
+    const h=heightAt(x,z);if(h<-0.1)return 'water';
+    if(zoneW(FROST,x,z)>0.5)return 'snow';if(zoneW(SWAMP,x,z)>0.5)return 'mud';
+    for(const q of SITES)if(Math.hypot(x-q.x,z-q.z)<q.r*0.8)return 'stone';
+    if(zoneW(DESERT,x,z)>0.5||h<1.1)return 'sand';return 'grass';
+  }
+  function stepSnd(surf,v,pan,big){
+    const t=ac.currentTime+0.005,k=big?0.7:1;
+    switch(surf){
+      case 'water':nz(t,0.22,v*1.3,700,pan);tn(t,420*k,220*k,0.1,'sine',v*0.5,pan);break;
+      case 'snow':nz(t,0.12,v*1.2,1600,pan);nz(t+0.05,0.09,v*0.8,2200,pan);break;
+      case 'mud':tn(t,170*k,80*k,0.12,'sine',v*0.9,pan);nz(t,0.1,v*0.5,350,pan);break;
+      case 'stone':tn(t,1100*k,600*k,0.04,'square',v*0.25,pan);nz(t,0.05,v*0.7,2800,pan);break;
+      case 'sand':nz(t,0.16,v*0.7,500,pan);break;
+      default:nz(t,0.08,v*0.9,900,pan);tn(t,95*k,60*k,0.07,'sine',v*0.6,pan);
+    }
+  }
+  let stAcc=0,aStep=0,waveT=3;
+  extraTick.push((T,dt,cam)=>{
+    if(!ac||!soundOn||ac.state==='suspended')return;
+    const cy=window.__verdant&&window.__verdant.camera?window.__verdant.camera.rotation.y:0;
+    const spd=Math.hypot(vx,vz);
+    if(mode==='walk'&&!flying&&spd>0.8&&eyeV.y-1.7-heightAt(eyeV.x,eyeV.z)<0.3){
+      stAcc+=spd*dt;if(stAcc>1.65){stAcc=0;stepSnd(surfaceAt(eyeV.x,eyeV.z),spd>5?0.17:0.11,0,false)}
+    }else stAcc=Math.min(stAcc,1.2);
+    for(const [id,r] of remotes){
+      if(!r.av||!(r.sp>1.2))continue;r.stAcc=(r.stAcc||0)+r.sp*dt;if(r.stAcc<1.65)continue;r.stAcc=0;
+      const dx=r.av.position.x-cam.x,dz=r.av.position.z-cam.z,d=Math.hypot(dx,dz);if(d>28)continue;
+      const f=1-d/28;stepSnd(surfaceAt(r.av.position.x,r.av.position.z),0.14*f*f,Math.max(-1,Math.min(1,(dx*Math.cos(cy)-dz*Math.sin(cy))/(d+1))),false);
+    }
+    aStep-=dt;
+    if(aStep<=0){
+      aStep=0.18;let n=0;
+      for(const a of animals){
+        if(n>=5)break;if(a.taken||!a.g.visible||!(a.mv>0.35))continue;
+        a.stT=(a.stT||0)-0.18;if(a.stT>0)continue;a.stT=(a.small?0.34:0.62)/(0.4+a.mv*0.6);
+        const dx=a.g.position.x-cam.x,dz=a.g.position.z-cam.z,d=Math.hypot(dx,dz);if(d>26)continue;n++;
+        const f=1-d/26,pan=Math.max(-1,Math.min(1,(dx*Math.cos(cy)-dz*Math.sin(cy))/(d+1))),su=surfaceAt(a.g.position.x,a.g.position.z);
+        if(a.small)nz(ac.currentTime+0.005,0.06,0.07*f*f,2600,pan);else stepSnd(su,0.16*f*f,pan,true);
+      }
+    }
+    waveT-=dt;
+    if(waveT<=0){waveT=5+Math.random()*5;const c=smooth(R-130,R-20,Math.hypot(eyeV.x,eyeV.z));if(c>0.15){nz(ac.currentTime+0.02,2.2,0.07*c,350,Math.random()*1.2-0.6)}}
   });
   const sb=$('#soundBtn');
   sb.addEventListener('click',()=>{
@@ -2460,9 +2655,10 @@ async function build(){
   }
   /* gestures */
   const GEST=[null,{e:'👋',n:'Wave',d:3.4},{e:'💃',n:'Dance',d:8},{e:'👏',n:'Clap',d:3.2},{e:'🙌',n:'Cheer',d:3.2},{e:'🪑',n:'Sit',d:0},{e:'🙇',n:'Bow',d:2.2},
-    {e:'⚔️',n:'Swing',d:1.0},{e:'🎯',n:'Throw',d:0.9},{e:'😋',n:'Eat',d:2.4},{e:'🎁',n:'Give',d:1.3},{e:'👉',n:'Point',d:2.5},{e:'🫡',n:'Salute',d:2},{e:'🤷',n:'Shrug',d:2},{e:'💪',n:'Flex',d:3},{e:'🤗',n:'Pet',d:2.5}];
+    {e:'⚔️',n:'Swing',d:1.0},{e:'🎯',n:'Throw',d:0.9},{e:'😋',n:'Eat',d:2.4},{e:'🎁',n:'Give',d:1.3},{e:'👉',n:'Point',d:2.5},{e:'🫡',n:'Salute',d:2},{e:'🤷',n:'Shrug',d:2},{e:'💪',n:'Flex',d:3},{e:'🤗',n:'Pet',d:2.5},
+    {e:'💧',n:'Drink',d:2.2},{e:'🎣',n:'Cast',d:1.6},{e:'🍳',n:'Cook',d:2.6},{e:'🙆',n:'Stretch',d:3},{e:'😂',n:'Laugh',d:2.8},{e:'👍',n:'Thumbs up',d:2.4},{e:'😴',n:'Sleep',d:0},{e:'🧎',n:'Crouch',d:0},{e:'🌀',n:'Spin',d:1.4},{e:'✊',n:'Fist pump',d:2}];
   function poseAvatar(av,gid,gt,swing,amt){
-    const {legs,arms,up,fore}=av.userData;
+    const {legs,arms,up,fore}=av.userData;av.rotation.order='YXZ';av.rotation.x=0;
     legs[0].rotation.set(0,0,0);legs[1].rotation.set(0,0,0);arms[0].rotation.set(0,0,0);arms[1].rotation.set(0,0,0);up.rotation.set(0,0,0);
     if(fore){fore[0].rotation.set(0.14,0,0);fore[1].rotation.set(0.14,0,0)}
     let oy=0,yo=0;
@@ -2503,6 +2699,16 @@ async function build(){
     else if(gid===13){const s=Math.sin(gt*5)*0.1;for(let i=0;i<2;i++){arms[i].rotation.x=-0.4;arms[i].rotation.z=sg(i)*(0.55+s);if(fore)fore[i].rotation.x=1.2}up.rotation.z=s*0.5}
     else if(gid===14){const k=Math.min(1,gt/0.4),b=Math.sin(gt*6)*0.05;for(let i=0;i<2;i++){arms[i].rotation.z=sg(i)*1.55*k;if(fore)fore[i].rotation.x=2.2*k}oy=Math.abs(b)}
     else if(gid===15){up.rotation.x=0.4*Math.min(1,gt/0.4);arms[1].rotation.x=-0.5-Math.sin(gt*6)*0.15;arms[0].rotation.x=-0.3;legs[0].rotation.x=0.2;legs[1].rotation.x=-0.2;oy=-0.06}
+    else if(gid===16){up.rotation.x=0.75*Math.min(1,gt/0.5);oy=-0.25*Math.min(1,gt/0.5);legs[0].rotation.x=legs[1].rotation.x=0.9*Math.min(1,gt/0.5);arms[0].rotation.x=-0.8;arms[1].rotation.x=-0.8+Math.sin(gt*5)*0.15;if(fore){fore[0].rotation.x=1.2;fore[1].rotation.x=1.2}}
+    else if(gid===17){const a=p<0.4?-2.2*(p/0.4):-2.2+(p-0.4)/0.6*1.7;arms[1].rotation.x=a;arms[0].rotation.x=-0.3;if(fore)fore[1].rotation.x=p<0.4?0.8:0.2;up.rotation.x=p<0.4?-0.1:0.15}
+    else if(gid===18){arms[1].rotation.x=-0.95+Math.sin(gt*8)*0.22;arms[0].rotation.x=-0.5;if(fore){fore[1].rotation.x=0.7;fore[0].rotation.x=0.9}up.rotation.x=0.3}
+    else if(gid===19){const k=Math.min(1,gt/0.6);for(let i=0;i<2;i++)arms[i].rotation.z=sg(i)*2.8*k;up.rotation.x=-0.18*k;legs[0].rotation.x=0.1;legs[1].rotation.x=-0.1}
+    else if(gid===20){for(let i=0;i<2;i++){arms[i].rotation.x=-0.6;arms[i].rotation.z=sg(i)*0.15}up.rotation.x=-0.22+Math.sin(gt*18)*0.05;oy=Math.abs(Math.sin(gt*14))*0.03}
+    else if(gid===21){arms[1].rotation.x=-1.25;if(fore)fore[1].rotation.x=1.5;oy=Math.abs(Math.sin(gt*6))*0.02}
+    else if(gid===22){av.rotation.x=Math.PI/2*Math.min(1,gt/0.7);oy=0.14*Math.min(1,gt/0.7);arms[0].rotation.set(0,0,-0.15);arms[1].rotation.set(0.1,0,0.15)}
+    else if(gid===23){oy=-0.5;legs[0].rotation.x=legs[1].rotation.x=1.55;legs[0].rotation.z=0.0;up.rotation.x=0.22;arms[0].rotation.x=arms[1].rotation.x=-0.35}
+    else if(gid===24){yo=Math.min(1,gt/1.4)*Math.PI*4;oy=Math.abs(Math.sin(Math.min(1,gt/1.4)*Math.PI))*0.15;for(let i=0;i<2;i++)arms[i].rotation.z=sg(i)*1.3}
+    else if(gid===25){const b=Math.abs(Math.sin(gt*6));arms[1].rotation.x=-2.8;arms[1].rotation.z=0.1;if(fore)fore[1].rotation.x=0.9+b*0.5;oy=b*0.05;arms[0].rotation.x=0.3}
     return {oy,yo};
   }
   const bubTex={};
