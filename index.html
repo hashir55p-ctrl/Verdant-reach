@@ -811,7 +811,7 @@ async function build(){
     if(slopeAt(x,z)>0.75)continue;
     if(rand()>smooth(-0.05,0.25,forestMask(x,z))*0.9+0.03)continue;
     const pine=rand()<(th>18?0.9:0.35);
-    trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,pine,v:rand()<0.5?0:1});
+    trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,leanX:(rand()-0.5)*0.045,leanZ:(rand()-0.5)*0.045,crownX:pine?0.92+rand()*0.16:0.84+rand()*0.32,crownZ:pine?0.92+rand()*0.16:0.84+rand()*0.32,pine,v:rand()<0.5?0:1});
   }
   const pineGeos=[buildPine(11,9,1.8,9.2,3.2,9),buildPine(23,8,1.6,8.0,2.8,9)];
   const broadGeos=[buildBroad(5,3.0,2.5,3.0,5.4,56,2.4),buildBroad(9,2.6,3.2,2.6,5.8,54,2.3)];
@@ -826,7 +826,7 @@ async function build(){
     const list=groups[gi],geo=gi<2?pineGeos[gi]:broadGeos[gi-2];
     const m=inst(geo,mat,Math.max(1,list.length));m.count=list.length;
     list.forEach((t,ix)=>{
-      put(m,ix,t.x,t.h-0.4,t.z,t.s,t.s*(0.92+rand()*0.2),t.s,0,t.ry,0);
+      put(m,ix,t.x,t.h-0.4,t.z,t.s*t.crownX,t.s*(0.92+rand()*0.2),t.s*t.crownZ,t.leanX,t.ry,t.leanZ);
       if(t.pine)tc.setHSL(0.33+rand()*0.04,0.42+rand()*0.12,0.29+rand()*0.08);
       else{
         const g=groveMask(t.x,t.z);
@@ -841,7 +841,7 @@ async function build(){
   });
   [[pineTr,pineTrunkGeo],[broadTr,broadTrunkGeo]].forEach(([list,geo])=>{
     const m=inst(geo,barkMat,Math.max(1,list.length));m.count=list.length;
-    list.forEach((t,ix)=>put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,0,t.ry,0));
+    list.forEach((t,ix)=>put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,t.leanX,t.ry,t.leanZ));
     m.castShadow=true;m.receiveShadow=true;fin(m);
   });
 
