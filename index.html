@@ -1155,7 +1155,7 @@ async function build(){
       _e4.set(rx||0,ry||0,rz||0);_q4.setFromEuler(_e4);_v4.set(x,y,z);_s4.set(sx,sy,sz);
       _m4.compose(_v4,_q4,_s4);_m4.premultiply(this.base);
       const g=geo.index?geo.toNonIndexed():geo.clone();g.applyMatrix4(_m4);
-      const k=0.94+rand()*0.12,c=lin(hex),p=g.attributes.position.array,n=g.attributes.normal.array;
+      const k=0.94+(this.rng||rand)()*0.12,c=lin(hex),p=g.attributes.position.array,n=g.attributes.normal.array;
       for(let i=0;i<p.length;i++){this.P.push(p[i]);this.N.push(n[i])}
       for(let i=0;i<p.length/3;i++)this.C.push(c.r*k,c.g*k,c.b*k);
       g.dispose();
@@ -1165,7 +1165,7 @@ async function build(){
   }
   const gBox=new THREE.BoxGeometry(1,1,1),gCyl=new THREE.CylinderGeometry(1,1,1,10),gCone4=new THREE.ConeGeometry(1,1,4,1).rotateY(Math.PI/4),gCone=new THREE.ConeGeometry(1,1,10),gTap=new THREE.CylinderGeometry(0.62,1,1,12),gSph=new THREE.SphereGeometry(1,10,8);
   const bMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.93,metalness:0});
-  const winMat=new THREE.MeshStandardMaterial({color:lin('#26323c'),emissive:new THREE.Color(1.0,0.6,0.2),emissiveIntensity:0,roughness:0.5,metalness:0});
+  const winMat=new THREE.MeshStandardMaterial({color:lin('#7f95a6'),emissive:new THREE.Color(1.0,0.6,0.2),emissiveIntensity:0,roughness:0.5,metalness:0});
   const MB=new Mesher(),ML=new Mesher(),MD=new Mesher();
   const R2=1.4142,pick=a=>a[Math.floor(rand()*a.length)];
   const STYLE={
@@ -1174,33 +1174,156 @@ async function build(){
     frost:{wall:['#7b5636','#6e4b2f','#876044'],roof:['#4c3a30','#443229'],base:'#6d6a66'},
     swamp:{wall:['#6f5b3f','#62513a','#7a6646'],roof:['#8c7c46','#7d6f3e'],base:'#4b4538'}
   };
+  const HOUSES=[],FLOORS=[],hrng=mulberry32(77031);
+  function floorAt(px,pz){
+    let best=-99;
+    for(const f of FLOORS){
+      const dx=px-f.x,dz=pz-f.z;if(dx*dx+dz*dz>f.r2)continue;
+      const lx=dx*f.c-dz*f.s,lz=dx*f.s+dz*f.c;
+      if(lx<f.u0||lx>f.u1||lz<f.v0||lz>f.v1)continue;
+      const y=f.ya+(f.yb-f.ya)*(f.v1>f.v0?(lz-f.v0)/(f.v1-f.v0):0);if(y>best)best=y;
+    }
+    return best;
+  }
   function house(x,z,yaw,w,d,h,kind){
     const st=STYLE[kind],y=heightAt(x,z),wall=pick(st.wall),roof=pick(st.roof);
-    MB.frame(x,y,z,yaw);ML.frame(x,y,z,yaw);
-    const stilt=kind==='swamp',by=stilt?1.9:0.6;
+    const stilt=kind==='swamp',by=stilt?1.86:0.12,th=0.28,dw=1.3,c=Math.cos(yaw),s=Math.sin(yaw);
+    const dome=kind==='desert'?rand()<0.55:false;
+    MB.frame(x,y,z,yaw);ML.frame(x,y,z,yaw);MB.rng=ML.rng=hrng;
+    const bx=[],WD='#4a3626';
+    const wbox=(ax,perp,a0,a1,y0,y1,col)=>{
+      if(a1-a0<0.01||y1-y0<0.01)return;
+      const m=(a0+a1)/2,L=a1-a0,cy=by+(y0+y1)/2,H=y1-y0;
+      if(ax==='x')MB.add(gBox,col,m,cy,perp,L,H,th,0,0,0);else MB.add(gBox,col,perp,cy,m,th,H,L,0,0,0);
+    };
+    const run=(ax,perp,len,ops)=>{
+      let cur=-len/2;
+      for(const o of ops){
+        const a0=o.c-o.w/2,a1=o.c+o.w/2;
+        wbox(ax,perp,cur,a0,0,h,wall);
+        if(o.y0>0)wbox(ax,perp,a0,a1,0,o.y0,wall);
+        if(o.y1<h)wbox(ax,perp,a0,a1,o.y1,h,wall);
+        cur=a1;
+        if(o.glass){
+          const gy=by+(o.y0+o.y1)/2,gh=o.y1-o.y0,gw=o.w;
+          if(ax==='x'){
+            ML.add(gBox,'#a9c8dc',o.c,gy,perp,gw-0.05,gh-0.05,0.05,0,0,0);
+            MB.add(gBox,WD,o.c,gy,perp,gw,0.07,0.1,0,0,0);MB.add(gBox,WD,o.c,gy,perp,0.07,gh,0.1,0,0,0);
+            MB.add(gBox,WD,o.c,by+o.y0-0.02,perp+0.09,gw+0.2,0.06,0.2,0,0,0);
+          }else{
+            ML.add(gBox,'#a9c8dc',perp,gy,o.c,0.05,gh-0.05,gw-0.05,0,0,0);
+            MB.add(gBox,WD,perp,gy,o.c,0.1,0.07,gw,0,0,0);MB.add(gBox,WD,perp,gy,o.c,0.1,gh,0.07,0,0,0);
+          }
+        }
+      }
+      wbox(ax,perp,cur,len/2,0,h,wall);
+    };
+    /* foundation and floor */
     if(stilt){
       for(const sx of [-1,1])for(const sz of [-1,1])MB.add(gCyl,'#4b3a28',sx*w*0.45,0.55,sz*d*0.45,0.15,2.7,0.15,0,0,0);
-      MB.add(gBox,'#7a6646',0,1.75,0,w+0.5,0.22,d+0.5,0,0,0);
-      MB.add(gBox,'#6b5636',0,0.9,d/2+1.6,0.9,0.12,3.4,-0.5,0,0);
-    }else MB.add(gBox,st.base,0,0.1,0,w+0.5,1.0,d+0.5,0,0,0);
-    MB.add(gBox,wall,0,by+h/2,0,w,h,d,0,0,0);
+      MB.add(gBox,'#7a6646',0,by-0.11,0,w+0.5,0.22,d+0.5,0,0,0);
+      const L=Math.hypot(3.6,by);MB.add(gBox,'#6b5636',0,by/2,d/2+0.25+1.8,1.3,0.12,L,Math.atan2(by,3.6),0,0);
+      FLOORS.push({x,z,c,s,r2:(w+d)*(w+d)+40,u0:-w/2-0.25,u1:w/2+0.25,v0:-d/2-0.25,v1:d/2+0.25,ya:y+by,yb:y+by});
+      FLOORS.push({x,z,c,s,r2:(w+d)*(w+d)+40,u0:-0.65,u1:0.65,v0:d/2+0.25,v1:d/2+3.85,ya:y+by,yb:y});
+      const ex=w/2+0.25,ez=d/2+0.25;
+      bx.push([0,-ez,ex,0.1,0],[-ex,0,0.1,ez,0],[ex,0,0.1,ez,0],[-(ex+0.65)/2,ez,(ex-0.65)/2,0.1,0],[(ex+0.65)/2,ez,(ex-0.65)/2,0.1,0]);
+    }else{
+      MB.add(gBox,st.base,0,by-0.25,0,w+0.5,0.5,d+0.5,0,0,0);
+      FLOORS.push({x,z,c,s,r2:(w+d)*(w+d)+40,u0:-w/2-0.25,u1:w/2+0.25,v0:-d/2-0.25,v1:d/2+0.25,ya:y+by,yb:y+by});
+    }
+    MB.add(gBox,'#8a6a46',0,by+0.015,0,w-th*2,0.03,d-th*2,0,0,0);
+    /* walls with openings */
+    const win=(cc,y0)=>({c:cc,w:0.95,y0:1.0,y1:1.95,glass:1});
+    run('x',d/2-th/2,w,[win(-w*0.3),{c:0,w:dw,y0:0,y1:2.1},win(w*0.3)]);
+    run('x',-d/2+th/2,w,[win(0)]);
+    run('z',-(w/2-th/2),d-th*2,[win(0)]);
+    run('z',w/2-th/2,d-th*2,[win(0)]);
+    bx.push([-(w+dw)/4,d/2-th/2,(w-dw)/4,th/2,1],[(w+dw)/4,d/2-th/2,(w-dw)/4,th/2,1],[0,-d/2+th/2,w/2,th/2,1],[-(w/2-th/2),0,th/2,d/2-th,1],[w/2-th/2,0,th/2,d/2-th,1]);
+    /* door leaf ajar */
+    {const a=1.45,len=1.2,hx=dw/2,hz=d/2-th/2;MB.add(gBox,'#5a3d2a',hx-len/2*Math.cos(a),by+1.0,hz-len/2*Math.sin(a),len,2.0,0.06,0,Math.PI-a,0)}
+    MB.add(gBox,'#e9dcc0',0,by+2.16,d/2+0.02,dw+0.3,0.1,0.12,0,0,0);
+    /* ceiling and roof */
+    MB.add(gBox,'#8a6a46',0,by+h+0.08,0,w,0.16,d,0,0,0);
+    for(const sx of [-1,1])MB.add(gBox,'#5a3d2a',sx*w*0.25,by+h-0.1,0,0.18,0.2,d-th*2,0,0,0);
     if(kind==='desert'){
-      MB.add(gBox,roof,0,by+h+0.17,0,w+0.35,0.35,d+0.35,0,0,0);
-      if(rand()<0.55)MB.add(gSph,'#e8d6ac',w*0.15,by+h+0.3,0,Math.min(w,d)*0.32,Math.min(w,d)*0.3,Math.min(w,d)*0.32,0,0,0);
-      else MB.add(gBox,wall,-w*0.22,by+h+0.9,-d*0.2,1.3,1.2,1.3,0,0,0);
+      MB.add(gBox,roof,0,by+h+0.33,0,w+0.35,0.35,d+0.35,0,0,0);
+      if(dome)MB.add(gSph,'#e8d6ac',w*0.15,by+h+0.46,0,Math.min(w,d)*0.32,Math.min(w,d)*0.3,Math.min(w,d)*0.32,0,0,0);
+      else MB.add(gBox,wall,-w*0.22,by+h+1.06,-d*0.2,1.3,1.2,1.3,0,0,0);
     }else{
       const rh=kind==='frost'?Math.max(w,d)*0.75+0.5:Math.max(w,d)*0.5+0.6;
-      MB.add(gCone4,roof,0,by+h+rh/2,0,(w+1.1)/R2,rh,(d+1.1)/R2,0,0,0);
-      if(kind==='frost')MB.add(gCone4,'#f4f8fb',0,by+h+rh*0.62,0,(w+1.18)/R2*0.64,rh*0.82,(d+1.18)/R2*0.64,0,0,0);
+      MB.add(gCone4,roof,0,by+h+0.16+rh/2,0,(w+1.1)/R2,rh,(d+1.1)/R2,0,0,0);
+      if(kind==='frost')MB.add(gCone4,'#f4f8fb',0,by+h+0.16+rh*0.62,0,(w+1.18)/R2*0.64,rh*0.82,(d+1.18)/R2*0.64,0,0,0);
       if(kind!=='swamp')MB.add(gBox,'#7d776c',w*0.26,by+h+rh*0.45,d*0.1,0.55,1.7,0.55,0,0,0);
     }
-    MB.add(gBox,'#5a3d2a',0,by+0.95,d/2+0.04,0.95,1.9,0.12,0,0,0);
-    MB.add(gBox,'#e9dcc0',0,by+1.97,d/2+0.03,1.2,0.12,0.14,0,0,0);
-    for(const sx of [-1,1]){
-      ML.add(gBox,'#fff',sx*w*0.3,by+h*0.62,d/2+0.04,0.7,0.7,0.1,0,0,0);
-      ML.add(gBox,'#fff',sx*(w/2+0.04),by+h*0.62,0,0.1,0.7,0.7,0,0,0);
+    /* furniture */
+    const m=hrng()<0.5?-1:1,ix=w/2-th-0.05,iz=d/2-th-0.05,fb=(cx,cz,hx,hz)=>bx.push([cx,cz,hx,hz,0]);
+    const blanket=['#9a3b3b','#3b5f9a','#4f7a4a','#8a6a2e','#6a3b7a'][Math.floor(hrng()*5)];
+    const rugC=['#8a3b3b','#3b6a7a','#7a6a3b','#5a4a7a'][Math.floor(hrng()*4)];
+    const WOOD='#6b4a2e';
+    // bed
+    {const bxx=m*(ix-0.6),bz=-iz+1.1;
+     MB.add(gBox,WOOD,bxx,by+0.16,bz,1.15,0.32,2.1,0,0,0);MB.add(gBox,'#d8cfc0',bxx,by+0.4,bz,1.0,0.16,1.95,0,0,0);
+     MB.add(gBox,blanket,bxx,by+0.5,bz+0.35,1.04,0.1,1.25,0,0,0);MB.add(gBox,'#f1ece0',bxx,by+0.52,bz-0.78,0.7,0.12,0.36,0,0,0);
+     MB.add(gBox,WOOD,bxx,by+0.55,bz-1.07,1.15,0.7,0.08,0,0,0);
+     fb(bxx,bz,0.58,1.05)}
+    // rug + table
+    {const tx=-m*0.4,tz=0.3;
+     MB.add(gBox,rugC,tx,by+0.04,tz,2.5,0.02,1.8,0,0,0);
+     MB.add(gBox,'#7a5a38',tx,by+0.8,tz,1.5,0.08,0.9,0,0,0);
+     for(const a of [-1,1])for(const b of [-1,1])MB.add(gBox,WOOD,tx+a*0.66,by+0.38,tz+b*0.36,0.08,0.76,0.08,0,0,0);
+     for(const b of [-1,1]){MB.add(gCyl,WOOD,tx+0.1,by+0.23,tz+b*0.85,0.2,0.46,0.2,0,0,0)}
+     MB.add(gCyl,'#d9d2c2',tx-0.35,by+0.88,tz,0.09,0.1,0.09,0,0,0);MB.add(gCyl,'#b5472f',tx+0.3,by+0.88,tz+0.1,0.14,0.08,0.14,0,0,0);
+     MB.add(gCyl,'#e8dcc0',tx,by+0.92,tz-0.15,0.04,0.18,0.04,0,0,0);ML.add(gSph,'#fff',tx,by+1.06,tz-0.15,0.05,0.07,0.05,0,0,0);
+     fb(tx,tz,0.78,0.5)}
+    // hearth / stove
+    {const hx=-m*(ix-0.35),hz=-iz+1.0,hc=kind==='desert'?'#c9a56a':kind==='frost'?'#3a3a3f':kind==='swamp'?'#6b5a3a':'#7d776c';
+     MB.add(gBox,hc,hx,by+0.55,hz,0.7,1.1,1.3,0,0,0);MB.add(gBox,'#1d1a18',hx+m*0.34,by+0.4,hz,0.06,0.4,0.6,0,0,0);
+     ML.add(gBox,'#fff',hx+m*0.36,by+0.34,hz,0.04,0.2,0.4,0,0,0);
+     MB.add(gBox,hc,hx,by+1.55,hz,0.5,1.5,0.6,0,0,0);
+     fb(hx,hz,0.38,0.68)}
+    // cupboard with jars
+    {const cz=-iz+0.26;
+     MB.add(gBox,WOOD,0,by+0.9,cz,1.4,1.8,0.45,0,0,0);
+     for(const yy of [0.62,1.15,1.62])MB.add(gBox,'#5a3d2a',0,by+yy,cz+0.02,1.3,0.05,0.46,0,0,0);
+     const JC=['#b5472f','#d9b95a','#4f7a4a','#7a4a8a','#c9c2b0','#3b6a9a'];
+     for(const yy of [0.7,1.23,1.7])for(let k=0;k<3;k++)MB.add(gCyl,JC[Math.floor(hrng()*6)],-0.45+k*0.45,by+yy+0.1,cz+0.1,0.1,0.2,0.1,0,0,0);
+     fb(0,cz,0.7,0.24)}
+    // crates by the door
+    {const cx=-m*(ix-0.35),cz=iz-0.45;MB.add(gBox,'#8a6a3a',cx,by+0.3,cz,0.6,0.6,0.6,0,0.2,0);MB.add(gBox,'#7a5a30',cx+m*0.05,by+0.75,cz,0.4,0.3,0.4,0,0.5,0);fb(cx,cz,0.32,0.32)}
+    // hanging lantern
+    MB.add(gCyl,'#2a2622',0,by+h-0.28,0.2,0.012,0.56,0.012,0,0,0);ML.add(gSph,'#fff',0,by+h-0.62,0.2,0.12,0.15,0.12,0,0,0);
+    MB.rng=ML.rng=null;
+    HOUSES.push({x,z,c,s,w,d,fy:y+by,h,br:Math.hypot(w,d)/2+5,bx});
+    /* keep the world's random sequence identical to the old solid houses */
+    for(let i=(stilt?6:1)+1+(kind==='desert'?2:1+(kind==='frost'?1:0)+(kind==='swamp'?0:1))+2+4;i>0;i--)rand();
+  }
+  const homeLight=new THREE.PointLight(0xffc27a,0,11,1.6);homeLight.castShadow=false;scene.add(homeLight);let homeK=0;
+  extraTick.push((T,dt)=>{
+    let H=null;const px=eyeV.x,pz=eyeV.z,py=eyeV.y-1.7;
+    for(const q of HOUSES){const dx=px-q.x,dz=pz-q.z;if(dx*dx+dz*dz>q.br*q.br)continue;
+      const lx=dx*q.c-dz*q.s,lz=dx*q.s+dz*q.c;if(Math.abs(lx)<q.w/2-0.2&&Math.abs(lz)<q.d/2-0.2&&py>q.fy-0.5&&py<q.fy+q.h){H=q;break}}
+    if(H)homeLight.position.set(H.x+0.2*H.s,H.fy+H.h-0.7,H.z+0.2*H.c);
+    homeK+=((H?1:0)-homeK)*Math.min(1,dt*5);
+    homeLight.intensity=homeK*1.5;homeLight.visible=homeK>0.01;
+  });
+  function houseHit(px,pz,r,py,walls){
+    for(const H of HOUSES){
+      const dx=px-H.x,dz=pz-H.z;if(dx*dx+dz*dz>H.br*H.br)continue;
+      const lx=dx*H.c-dz*H.s,lz=dx*H.s+dz*H.c;
+      for(const b of H.bx){
+        if(walls&&!b[4])continue;
+        const ex=Math.abs(lx-b[0])-b[2],ez=Math.abs(lz-b[1])-b[3];
+        if(walls){if(ex<r&&ez<r&&py<H.fy+H.h+0.4)return true;continue}
+        if(ex>=r||ez>=r||py>H.fy+3)continue;
+        if(ex<0&&ez<0){ if(ex>ez){const sg=lx>b[0]?1:-1;px+=(H.c*sg)*(-ex+r);pz+=(-H.s*sg)*(-ex+r)}else{const sg=lz>b[1]?1:-1;px+=(H.s*sg)*(-ez+r);pz+=(H.c*sg)*(-ez+r)} return [px,pz]}
+        const ox=Math.max(ex,0),oz=Math.max(ez,0),dd=Math.hypot(ox,oz);if(dd>=r)continue;
+        const qx=Math.max(b[0]-b[2],Math.min(b[0]+b[2],lx)),qz=Math.max(b[1]-b[3],Math.min(b[1]+b[3],lz));
+        let nx=lx-qx,nz=lz-qz;const nl=Math.hypot(nx,nz)||1;nx=nx/nl*(r-dd);nz=nz/nl*(r-dd);
+        px+=nx*H.c+nz*H.s;pz+=-nx*H.s+nz*H.c;return [px,pz];
+      }
+      if(walls){const ceil=py>H.fy+H.h-0.1&&py<H.fy+H.h+0.5&&Math.abs(lx)<H.w/2+0.1&&Math.abs(lz)<H.d/2+0.1;if(ceil)return true}
     }
-    addCol(x,z,Math.max(w,d)*0.62);
+    return walls?false:null;
   }
   function well(x,z){
     const y=heightAt(x,z);MB.frame(x,y,z,0);
@@ -2005,7 +2128,8 @@ async function build(){
 
   Object.assign(window.__items,{makeCampfire,castNow,reelIn,cookNow,drinkNow,fires,hold(i){heldSel=i},keepAnimal,isWater,fstate:()=>fishing&&fishing.phase});
   const extrasTick=(T,dt)=>{for(const f of extraTick)f(T,dt,camera.position)};
-  const deckAt=(px,pz)=>{for(const b of BRIDGES){const dx=px-b.x,dz=pz-b.z,s=Math.sin(b.yaw),c=Math.cos(b.yaw),u=dx*s+dz*c,v=dx*c-dz*s;if(Math.abs(u)<b.L/2&&Math.abs(v)<1.6)return b.y}return -99};
+  const deckAt0=(px,pz)=>{for(const b of BRIDGES){const dx=px-b.x,dz=pz-b.z,s=Math.sin(b.yaw),c=Math.cos(b.yaw),u=dx*s+dz*c,v=dx*c-dz*s;if(Math.abs(u)<b.L/2&&Math.abs(v)<1.6)return b.y}return -99};
+  const deckAt=(px,pz)=>Math.max(deckAt0(px,pz),floorAt(px,pz));
 
   /* grass and flowers around the player */
   say('Sowing the meadows');await tick();
@@ -2043,13 +2167,18 @@ async function build(){
     gcache.set(key,e);return e;
   }
   let gcx=1e9,gcz=1e9;
+  function onHouse(x,z){
+    for(const H of HOUSES){const dx=x-H.x,dz=z-H.z;if(dx*dx+dz*dz>H.br*H.br)continue;
+      const lx=dx*H.c-dz*H.s,lz=dx*H.s+dz*H.c;if(Math.abs(lx)<H.w/2+0.7&&Math.abs(lz)<H.d/2+0.7)return true}
+    return false;
+  }
   function rebuildGrass(cx,cz){
     gcx=cx;gcz=cz;let na=0,nb=0;
     const i0=Math.floor((cx-GR)/GC),i1=Math.floor((cx+GR)/GC),j0=Math.floor((cz-GR)/GC),j1=Math.floor((cz+GR)/GC);
     for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
       const px=(i+0.5)*GC,pz=(j+0.5)*GC;
       if((px-cx)*(px-cx)+(pz-cz)*(pz-cz)>GR*GR)continue;
-      const e=cellAt(i,j);if(!e)continue;
+      const e=cellAt(i,j);if(!e||onHouse(e.x,e.z))continue;
       const m=e.b?grassB:grassA;let ix=e.b?nb:na;if(ix>=CAP)continue;
       put(m,ix,e.x,e.y-0.04,e.z,e.s,e.s*(0.8+e.r*0.4),e.s,0,e.ry,0);
       tc.setRGB(e.r,e.g,e.bl);m.setColorAt(ix,tc);
@@ -2109,7 +2238,7 @@ async function build(){
     let na=0,nb=0;const i0=Math.floor((cx-FR)/FGC),i1=Math.floor((cx+FR)/FGC),j0=Math.floor((cz-FR)/FGC),j1=Math.floor((cz+FR)/FGC);
     for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
       const px=(i+0.5)*FGC,pz=(j+0.5)*FGC;if((px-cx)*(px-cx)+(pz-cz)*(pz-cz)>FR*FR)continue;
-      const e=fernCell(i,j);if(!e)continue;const m=e.b?fernB:fernA;const ix=e.b?nb:na;if(ix>=(e.b?900:FCAP))continue;
+      const e=fernCell(i,j);if(!e||onHouse(e.x,e.z))continue;const m=e.b?fernB:fernA;const ix=e.b?nb:na;if(ix>=(e.b?900:FCAP))continue;
       put(m,ix,e.x,e.y-0.03,e.z,e.s,e.s*(0.85+e.t*0.3),e.s,0,e.ry,0);tc.setRGB(e.t,e.t+0.06,e.t-0.1);m.setColorAt(ix,tc);
       if(e.b)nb++;else na++;
     }
@@ -2206,6 +2335,7 @@ async function build(){
         if(d2<r*r&&d2>1e-8){const d=Math.sqrt(d2);P.x=arr[k]+dx/d*r;P.z=arr[k+1]+dz/d*r}
       }
     }
+    for(let it=0;it<2;it++){const q=houseHit(P.x,P.z,0.4,groundAt(P.x,P.z)+0.2,false);if(!q)break;P.x=q[0];P.z=q[1]}
   }
   function setFly(on){
     if(on===flying)return;
@@ -3169,12 +3299,16 @@ async function build(){
   const eyeV=new THREE.Vector3();
   let tpp=true;try{const v=localStorage.getItem('vr.tpp');if(v!==null)tpp=v==='1'}catch(e){}
   let tpDist=0,myAv=null,myAvKey='',myPh=0,myBub=null;
+  function camWall(dx,dy,dz,rx,rz,t,dist){
+    for(let q=1;q>0.2;q-=0.25){const tt=t*q,f=tt/dist;if(houseHit(eyeV.x-dx*tt+rx*0.5*f,eyeV.z-dz*tt+rz*0.5*f,0.3,eyeV.y+0.3-dy*tt,true))return true}
+    return false;
+  }
   function applyTPP(){
     const cp=Math.cos(pitch),dx=-Math.sin(yaw)*cp,dy=Math.sin(pitch),dz=-Math.cos(yaw)*cp,rx=Math.cos(yaw),rz=-Math.sin(yaw);
     const dist=flying?6:3.8;let t=dist;
     for(let k=0;k<9;k++){
       const f=t/dist,px=eyeV.x-dx*t+rx*0.5*f,py2=eyeV.y+0.3-dy*t,pz=eyeV.z-dz*t+rz*0.5*f;
-      if(py2>Math.max(heightAt(px,pz),-0.9)+0.5)break;t*=0.8;
+      if(py2>Math.max(heightAt(px,pz),-0.9)+0.5&&!camWall(dx,dy,dz,rx,rz,t,dist))break;t*=0.8;
     }
     const f=t/dist;tpDist=t;
     camera.position.set(eyeV.x-dx*t+rx*0.5*f,eyeV.y+0.3-dy*t,eyeV.z-dz*t+rz*0.5*f);
@@ -3579,7 +3713,7 @@ async function build(){
   }
   applyTime();
   frame();
-  window.__verdant={world:{heightAt,riverD,forestMask,zoneW,FROST,DESERT,SWAMP,SITES,R},poseAvatar,GEST,critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
+  window.__verdant={houses:HOUSES,eyeV:()=>eyeV,world:{heightAt,riverD,forestMask,zoneW,FROST,DESERT,SWAMP,SITES,R},poseAvatar,GEST,critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
   $('#veil').classList.add('gone');
 }
 

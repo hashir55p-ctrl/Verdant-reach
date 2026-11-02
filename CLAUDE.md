@@ -35,3 +35,9 @@ Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek,
 - Post-processing (`post`, `postBuild`, `postRender`): FXAA, distance mist, god rays, colour grade, vignette, grain. Used in Balanced/Quality only; Performance renders directly.
 - Terrain shader: world-space litter/moss/strata, faint distance-faded bump (keep strength low or it moirés). Extra `fill` light + stronger hemi lift shadows.
 - Ferns (`rebuildFerns`), props module (logs, stumps, stones, river boulders, own seed 60606), dust motes. Use separate seeded RNGs for new content so existing worlds don't shift.
+
+## Enterable houses
+- `house()` builds hollow houses: walls with a door gap and glass windows (`run`/`wbox`), floor, ceiling, ajar door, furniture (bed, table, hearth, cupboard, crates, lantern). Swamp houses are on stilts with a walkable ramp.
+- Collision: `HOUSES[].bx` oriented boxes `[lx,lz,hx,hz,isWall]` checked by `houseHit` (in `collide()` and for camera blocking in `camWall`). Floors/ramps: `FLOORS` + `floorAt`, folded into `deckAt`/`groundAt`.
+- Interiors use their own RNG `hrng` and burn the old number of `rand()` calls so the rest of the world stays identical. `homeLight` is one warm point light that follows the player inside a house. Grass/ferns skip house footprints (`onHouse`).
+- Not enterable yet: lighthouse, windmill, tents, ruins.
