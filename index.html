@@ -1590,7 +1590,11 @@ async function build(){
   def(60,'Grilled Fish','🍣','food',1,'Hot from the fire.',()=>[[IS(10,8),'#a0642a',[0,0.04,0],[0.16,0.05,0.04]],[ICone(4),'#7a4a20',[-0.17,0.04,0],[0.05,0.07,0.012],[0,0,Math.PI/2]],[IC(5),'#6b4a2a',[0,0.04,0],[0.006,0.5,0.006],[0,0,Math.PI/2]],[IS(5,4),'#2a1a10',[0.08,0.045,0.01],[0.1,0.012,0.045]]]);
   def(61,'Roast Mushroom','🍄','food',1,'Smoky and savoury.',()=>[[IC(6),'#d8c8a0',[0,0.04,0],[0.028,0.08,0.028]],[IS(),'#7a4a2a',[0,0.1,0],[0.09,0.055,0.09]]]);
   def(62,'Baked Apple','🍎','food',1,'Soft and warm.',()=>[[IS(),'#8a3a1a',[0,0,0],[0.11,0.09,0.11]],stem(0.09)]);
-  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23,60,61,62],THING_IDS=[20,21,22,24,25,26,27,28,29],FISH_IDS=[50,51,52,53,54,55,56,57];
+  const roastP=(c)=>()=>[[IS(10,8),c,[0,0.06,0],[0.14,0.09,0.1]],[IS(8,6),'#c88a48',[0.02,0.1,0.01],[0.1,0.05,0.07]],[IC(5),'#efe6d0',[0.17,0.06,0],[0.014,0.1,0.014],[0,0,Math.PI/2]],[IS(5,4),'#efe6d0',[0.23,0.06,0],[0.022,0.022,0.022]]];
+  def(63,'Roast Rabbit','🍖','food',1,'Tender and smoky.',roastP('#9a5a28'));
+  def(64,'Roast Chicken','🍗','food',1,'Golden and juicy.',roastP('#c07a30'));
+  def(65,'Roast Duck','🍗','food',1,'Rich and crispy.',roastP('#8a4a22'));
+  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23,60,61,62,63,64,65],THING_IDS=[20,21,22,24,25,26,27,28,29],FISH_IDS=[50,51,52,53,54,55,56,57];
   const itemMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.62,metalness:0});
   for(const id in ITEMS){const it=ITEMS[id];it.geo=cgeo(it.parts())}
   /* where things lie */
@@ -1643,8 +1647,8 @@ async function build(){
   const nowS=()=>performance.now()/1000;
   function takeItem(it,respawn){it.alive=false;it.back=respawn?nowS()+240:0;itemUpd(it)}
   /* collection (bag) */
-  const bag={n:{},seen:{},an:{}};
-  try{const sv=JSON.parse(localStorage.getItem('vr.bag')||'null');if(sv&&sv.n){bag.n=sv.n;bag.seen=sv.seen||{};bag.an=sv.an||{}}}catch(e){}
+  const bag={n:{},seen:{},ac:{}};
+  try{const sv=JSON.parse(localStorage.getItem('vr.bag')||'null');if(sv&&sv.n){bag.n=sv.n;bag.seen=sv.seen||{};bag.ac=sv.ac||{}}}catch(e){}
   let heldSel=0,heldAnimal=-1;
   const saveBag=()=>{try{localStorage.setItem('vr.bag',JSON.stringify(bag))}catch(e){}if(window.__acct&&window.__acct.save)window.__acct.save(bag)};
   function addBag(id,n=1){bag.n[id]=Math.max(0,(bag.n[id]||0)+n);if(n>0)bag.seen[id]=1;saveBag();bagUI()}
@@ -1664,7 +1668,7 @@ async function build(){
   }
   function pickUp(c){
     if(!c)return;
-    if(c.a){const a=c.a,i=animals.indexOf(a);if(heldAnimal>=0){toast('Your hands are full');return}a.taken=true;heldAnimal=i;heldSel=0;critter(a.kind,0.3,0);sendEv(null,{k:'gtake',a:i});const nm=ANI_NAME[ANI_CODE[a.kind]];toast('You picked up the '+nm[0]+' '+nm[1]);bagUI();return}
+    if(c.a){const a=c.a,i=animals.indexOf(a);if(heldAnimal>=0){toast('Your hands are full');return}a.taken=true;heldAnimal=i;heldSel=0;critter(a.kind,0.3,0);sendEv(null,{k:'gtake',a:i});const nm=ANI_NAME[ANI_CODE[a.kind]];toast('You picked up the '+nm[0]+' '+nm[1]+'. Open the bag (Animals tab) to keep it');bagUI();return}
     const it=c.it;takeItem(it,!it.dyn);sendEv(null,{k:'take',i:it.i,u:it.uid});addBag(it.t,1);if(heldAnimal<0&&!heldCode())heldSel=it.t;
     toast('+1 '+ITEMS[it.t].e+' '+ITEMS[it.t].n);bagUI();
   }
@@ -1691,6 +1695,7 @@ async function build(){
     if(d.k==='take'){const it=d.u?dynMap.get(d.u):items[d.i];if(it&&it.alive)takeItem(it,!it.dyn)}
     else if(d.k==='put'){if(!dynMap.has(d.u)||!dynMap.get(d.u).alive)dropItem(d.t,+d.x,+d.z,d.u)}
     else if(d.k==='gtake'){const a=animals[d.a|0];if(a)a.taken=true}
+    else if(d.k==='gkeep'){const a=animals[d.a|0];if(a){a.taken=true;a.kept=Date.now()+300000}}
     else if(d.k==='gput'){const a=animals[d.a|0];if(a)releaseAnimal(a,+d.x,+d.z)}
     else if(d.k==='knock'){const it=items[d.i|0];if(it&&it.hang){it.hang=false;it.fall=0.001}}
     else if(d.k==='fire'){buildFire(d.x,d.z,d.e,d.u)}
@@ -1793,23 +1798,42 @@ async function build(){
   const nowMs=()=>Date.now();
   /* rods lie around */
   for(const [S,n] of [[WM,3],[SV('Lighthouse'),2],[HC,1],[DR,1]]){if(!S)continue;for(let k=0;k<n;k++){const a=IR()*6.28,r=S.r*(0.3+IR()*0.5),x=S.x+Math.cos(a)*r,z=S.z+Math.sin(a)*r;if(heightAt(x,z)>0.5)addItem(29,x,heightAt(x,z),z,false)}}
-  /* animals log */
-  if(!bag.an)bag.an={};
-  const ANI_LIST=[['deer','Deer','🦌'],['doe','Doe','🦌'],['camel','Camel','🐪'],['wolf','Wolf','🐺'],['sheep','Sheep','🐑'],['rabbit','Rabbit','🐇'],['chicken','Chicken','🐔'],['duck','Duck','🦆'],['hedgehog','Hedgehog','🦔'],['fox','Fox','🦊'],['kit','Fox kit','🦊'],['eagle','Eagle','🦅'],['parrot','Parrot','🦜'],['gull','Seagull','🕊️'],['crow','Crow','🐦‍⬛']];
-  function spot(kind){if(bag.an[kind])return;bag.an[kind]=1;const r=ANI_LIST.find(q=>q[0]===kind);saveBag();bagUI();if(r)toast('New animal: '+r[2]+' '+r[1]+' — added to your collection')}
-  let spotAcc=0;
-  extraTick.push((T,dt,cam)=>{
-    spotAcc+=dt;if(spotAcc<0.6)return;spotAcc=0;
-    for(const a of animals){if(a.taken||!a.g.visible||bag.an[a.kind])continue;if(Math.hypot(a.g.position.x-cam.x,a.g.position.z-cam.z)<22)spot(a.kind)}
-    for(const b of birds){if(!b.kind||!b.g.visible||bag.an[b.kind])continue;if(Math.hypot(b.g.position.x-cam.x,b.g.position.z-cam.z)<45)spot(b.kind)}
-  });
+  /* animals you keep (small ones can be caught, kept, released or cooked) */
+  if(!bag.ac)bag.ac={};
+  const ANI_LIST=[['rabbit','Rabbit','🐇',63],['chicken','Chicken','🐔',64],['duck','Duck','🦆',65],['hedgehog','Hedgehog','🦔',0],['kit','Fox kit','🦊',0]];
+  let cookKind='';
+  function keepAnimal(){
+    if(heldAnimal<0){toast('Pick up a small animal first');return}
+    const a=animals[heldAnimal];if(!ANI_LIST.some(q=>q[0]===a.kind)){return}
+    bag.ac[a.kind]=(bag.ac[a.kind]||0)+1;a.kept=Date.now()+300000;sendEv(null,{k:'gkeep',a:heldAnimal});heldAnimal=-1;saveBag();bagUI();
+    const q=ANI_LIST.find(q=>q[0]===a.kind);toast(q[2]+' '+q[1]+' kept in your collection');
+  }
+  extraTick.push(()=>{const n=Date.now();for(const a of animals)if(a.kept&&n>a.kept){a.kept=0;a.taken=false}});
+  function releaseKept(kind){
+    if(!(bag.ac[kind]>0))return;const a=animals.find(a=>a.kind===kind&&a.taken&&a.kept&&animals.indexOf(a)!==heldAnimal)||animals.find(a=>a.kind===kind&&a.taken&&animals.indexOf(a)!==heldAnimal);
+    bag.ac[kind]--;saveBag();const [x,z]=placeAhead(2);
+    if(a){a.kept=0;releaseAnimal(a,x,z);sendEv(null,{k:'gput',a:animals.indexOf(a),x,z})}
+    bagUI();toast('You let it go');
+  }
   function animalTab(){
-    const g=$('#bagGrid');const found=ANI_LIST.filter(q=>bag.an[q[0]]).length;
-    $('#bagProg').textContent=found+' of '+ANI_LIST.length+' seen';
+    const g=$('#bagGrid');const have=ANI_LIST.filter(q=>bag.ac[q[0]]>0).length;
+    $('#bagProg').textContent=have+' kinds kept';
     document.querySelectorAll('#bagTabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===bagTab)));
     g.innerHTML='';
-    for(const [k,n,e] of ANI_LIST){const s=bag.an[k];const b=document.createElement('div');b.className='bc'+(s?'':' lock');b.innerHTML='<span class="be">'+(s?e:'?')+'</span><span class="bn">'+(s?n:'???')+'</span>';g.appendChild(b)}
-    const A=$('#bagAct');A.innerHTML='<div class="bdesc"><span>Walk close to an animal or bird to add it. Small ones can also be picked up.</span></div>';
+    for(const [k,n,e] of ANI_LIST){const c=bag.ac[k]|0;const b=document.createElement('button');b.type='button';b.className='bc'+(c?'':' lock')+(bagSel===k?' sel':'');b.innerHTML='<span class="be">'+e+'</span><span class="bn">'+n+'</span>'+(c?'<span class="bq">×'+c+'</span>':'');b.addEventListener('click',()=>{bagSel=k;bagUI()});g.appendChild(b)}
+    const A=$('#bagAct');A.innerHTML='';
+    const row=document.createElement('div');row.className='brow';
+    const mk=(t,fn,cls)=>{const b=document.createElement('button');b.type='button';b.textContent=t;if(cls)b.className=cls;b.addEventListener('click',fn);row.appendChild(b)};
+    const p=document.createElement('div');p.className='bdesc';
+    if(heldAnimal>=0&&ANI_LIST.some(q=>q[0]===animals[heldAnimal].kind)){
+      const q=ANI_LIST.find(q=>q[0]===animals[heldAnimal].kind);p.innerHTML='<b>'+q[2]+' You are holding a '+q[1]+'</b>';A.appendChild(p);
+      mk('Keep in collection',()=>keepAnimal(),'pri');mk('Let it go',()=>{dropHeld(false);bagUI()});
+    }else if(typeof bagSel==='string'&&ANI_LIST.some(q=>q[0]===bagSel)){
+      const q=ANI_LIST.find(q=>q[0]===bagSel),c=bag.ac[bagSel]|0;
+      p.innerHTML='<b>'+q[2]+' '+q[1]+'</b> <span>'+(c?'× '+c+' kept':'none kept')+(q[3]?' · can be cooked over a campfire':' · cute, but not for eating')+'</span>';A.appendChild(p);
+      if(c){if(q[3])mk('🍳 Cook',()=>{cookKind=bagSel;setGesture(18);closeBag()},'pri');mk('Let it go',()=>releaseKept(bagSel))}
+    }else{p.innerHTML='<span>Catch small animals (rabbits, chickens, ducks, hedgehogs, fox kits): pick one up, then open this tab and tap Keep. Cook rabbits, chickens and ducks at a campfire.</span>';A.appendChild(p)}
+    A.appendChild(row);
   }
   /* campfires */
   const fires=[];
@@ -1853,6 +1877,7 @@ async function build(){
   /* cooking */
   const COOK={50:60,51:60,52:60,53:60,54:60,55:60,56:60,57:60,23:61,1:62};
   function cookNow(){
+    if(cookKind){const k=cookKind;cookKind='';const q=ANI_LIST.find(q=>q[0]===k);if(!q||!q[3]||!(bag.ac[k]>0)){return}if(!nearFire(4)){toast('Stand next to a campfire first. Build one with 3 sticks.');return}bag.ac[k]--;saveBag();addBag(q[3],1);heldSel=q[3];if(ac&&soundOn)nz(ac.currentTime+0.01,1.2,0.12,1500,0);toast('Cooked! '+ITEMS[q[3]].e+' '+ITEMS[q[3]].n+' — try the Eat gesture');return}
     const id=heldSel;
     if(heldAnimal>=0||!id||!COOK[id]||(bag.n[id]||0)<1){toast('Hold something you can cook (fish, apple, mushroom)');return}
     if(!nearFire(4)){toast('Stand next to a campfire first. Build one with 3 sticks.');return}
@@ -1914,7 +1939,7 @@ async function build(){
     fishMesh.count=n;fishMesh.instanceMatrix.needsUpdate=true;
   });
 
-  Object.assign(window.__items,{makeCampfire,castNow,reelIn,cookNow,drinkNow,fires,hold(i){heldSel=i},spot,isWater,fstate:()=>fishing&&fishing.phase});
+  Object.assign(window.__items,{makeCampfire,castNow,reelIn,cookNow,drinkNow,fires,hold(i){heldSel=i},keepAnimal,isWater,fstate:()=>fishing&&fishing.phase});
   const extrasTick=(T,dt)=>{for(const f of extraTick)f(T,dt,camera.position)};
   const deckAt=(px,pz)=>{for(const b of BRIDGES){const dx=px-b.x,dz=pz-b.z,s=Math.sin(b.yaw),c=Math.cos(b.yaw),u=dx*s+dz*c,v=dx*c-dz*s;if(Math.abs(u)<b.L/2&&Math.abs(v)<1.6)return b.y}return -99};
 
@@ -3229,7 +3254,7 @@ async function build(){
       if(u.profile){me=Object.assign(me,cleanProf(u.profile));if(window.__refreshMaker)window.__refreshMaker()}
       else if(u.name&&(!me.n||me.n==='Traveller')){me.n=cleanProf({n:u.name}).n;if(window.__refreshMaker)window.__refreshMaker()}
       const I=window.__items;
-      if(I&&u.bag&&u.bag.n){for(const k in u.bag.n)I.bag.n[k]=Math.max(I.bag.n[k]||0,u.bag.n[k]|0);for(const k in (u.bag.seen||{}))I.bag.seen[k]=1;try{localStorage.setItem('vr.bag',JSON.stringify(I.bag))}catch(e){}}
+      if(I&&u.bag&&u.bag.n){for(const k in u.bag.n)I.bag.n[k]=Math.max(I.bag.n[k]||0,u.bag.n[k]|0);for(const k in (u.bag.seen||{}))I.bag.seen[k]=1;I.bag.ac=I.bag.ac||{};for(const k in (u.bag.ac||{}))I.bag.ac[k]=Math.max(I.bag.ac[k]|0,u.bag.ac[k]|0);try{localStorage.setItem('vr.bag',JSON.stringify(I.bag))}catch(e){}}
       render();
     }
     function signOut(){tok=null;user=null;try{localStorage.removeItem('vr.tok')}catch(e){}render()}
