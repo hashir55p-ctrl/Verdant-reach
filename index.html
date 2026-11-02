@@ -352,6 +352,7 @@ button{font-family:inherit}
       <p class="sub" id="msub">Verdant Reach</p>
       <button id="resumeBtn" class="mrow resume" type="button">Resume</button>
       <button id="viewBtn" class="pill" data-l="Camera" type="button" aria-pressed="true" aria-label="Switch camera view">3rd person</button>
+      <button id="voiceBtn" class="pill" data-l="Voice range" type="button" aria-label="Choose who you can hear">Everyone</button>
       <button id="timeBtn" class="pill" data-l="Time of day" type="button" aria-label="Jump to the next time of day">Time</button>
       <button id="soundBtn" class="pill" data-l="Sound" type="button" aria-pressed="true" aria-label="Toggle ambient sound">Sound</button>
       <button id="gfxBtn" class="pill" data-l="Graphics" type="button" aria-label="Change graphics quality">Balanced</button>
@@ -3335,6 +3336,11 @@ async function build(){
     refresh();
   })();
 
+  /* voice range: hear everyone anywhere, or only people near you */
+  let voiceAll=true;try{const v=localStorage.getItem('vr.voiceAll');if(v!==null)voiceAll=v==='1'}catch(e){}
+  const voiceBtn=$('#voiceBtn');
+  const voiceUI=()=>{voiceBtn.textContent=voiceAll?'Everyone':'Nearby only';voiceBtn.setAttribute('aria-pressed',String(voiceAll))};
+  voiceBtn.addEventListener('click',()=>{voiceAll=!voiceAll;try{localStorage.setItem('vr.voiceAll',voiceAll?'1':'0')}catch(e){}voiceUI()});voiceUI();
   /* remote players */
   const remotes=new Map();
   const myId=Math.random().toString(36).slice(2,10);
@@ -3715,7 +3721,7 @@ async function build(){
         const e=GEST[gid].e;if(r.bub.userData.e!==e){r.bub.userData.e=e;r.bub.material.map=bubbleFor(e);r.bub.material.needsUpdate=true}
         r.bub.position.y=(gid===5?1.55:2.0)+0.62+Math.sin(r.gt*3)*0.04;r.bub.visible=true;r.tag.position.y=2.0+(gid===5?-0.4:0);
       }else if(r.bub){r.bub.visible=false;r.tag.position.y=2.0}
-      if(r.vg){const v=d<25?1:Math.max(0,1-(d-25)/115);r.vg.gain.setTargetAtTime(Math.pow(v,1.4),vctx.currentTime,0.08)}
+      if(r.vg){const v=voiceAll?1:(d<25?1:Math.max(0,1-(d-25)/115));r.vg.gain.setTargetAtTime(voiceAll?1:Math.pow(v,1.4),vctx.currentTime,0.08)}
     }
     if(net.bk&&!isHost()){const h=hostRemote();if(h){const d=((h.hh-hours+36)%24)-12;if(Math.abs(d)>1)hours=(hours+d+24)%24;else if(Math.abs(d)>0.012)hours=(hours+d*Math.min(1,dt*3)+24)%24}}
     vT+=dt;rlT+=dt;if(rlT>1){rlT=0;updateRoomLine()}
