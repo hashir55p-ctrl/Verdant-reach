@@ -30,3 +30,8 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 
 ## Ideas not built yet
 Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek, weather, saved rooms, TURN server for voice on strict networks.
+
+## Graphics (realism pass)
+- Post-processing (`post`, `postBuild`, `postRender`): FXAA, distance mist, god rays, colour grade, vignette, grain. Used in Balanced/Quality only; Performance renders directly.
+- Terrain shader: world-space litter/moss/strata, faint distance-faded bump (keep strength low or it moirés). Extra `fill` light + stronger hemi lift shadows.
+- Ferns (`rebuildFerns`), props module (logs, stumps, stones, river boulders, own seed 60606), dust motes. Use separate seeded RNGs for new content so existing worlds don't shift.
