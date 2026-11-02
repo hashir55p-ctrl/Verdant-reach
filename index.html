@@ -1239,8 +1239,9 @@ async function build(){
     run('z',-(w/2-th/2),d-th*2,[win(0)]);
     run('z',w/2-th/2,d-th*2,[win(0)]);
     bx.push([-(w+dw)/4,d/2-th/2,(w-dw)/4,th/2,1],[(w+dw)/4,d/2-th/2,(w-dw)/4,th/2,1],[0,-d/2+th/2,w/2,th/2,1],[-(w/2-th/2),0,th/2,d/2-th,1],[w/2-th/2,0,th/2,d/2-th,1]);
-    /* door leaf ajar */
-    {const a=1.45,len=1.2,hx=dw/2,hz=d/2-th/2;MB.add(gBox,'#5a3d2a',hx-len/2*Math.cos(a),by+1.0,hz-len/2*Math.sin(a),len,2.0,0.06,0,Math.PI-a,0)}
+    /* door: animated leaf (see makeDoors) */
+    const door={a:0,t:0,hx:dw/2,hy:by+1.0,hz:d/2-th/2,len:dw-0.06,auto:0,H:null};
+    bx.push([0,d/2-th/2,dw/2,th/2,1,door]);
     MB.add(gBox,'#e9dcc0',0,by+2.16,d/2+0.02,dw+0.3,0.1,0.12,0,0,0);
     /* ceiling and roof */
     MB.add(gBox,'#8a6a46',0,by+h+0.08,0,w,0.16,d,0,0,0);
@@ -1293,7 +1294,7 @@ async function build(){
     // hanging lantern
     MB.add(gCyl,'#2a2622',0,by+h-0.28,0.2,0.012,0.56,0.012,0,0,0);ML.add(gSph,'#fff',0,by+h-0.62,0.2,0.12,0.15,0.12,0,0,0);
     MB.rng=ML.rng=null;
-    HOUSES.push({x,z,c,s,w,d,fy:y+by,h,br:Math.hypot(w,d)/2+5,bx});
+    const HH={x,z,y,yaw,c,s,w,d,fy:y+by,h,br:Math.hypot(w,d)/2+5,bx,door,i:HOUSES.length};door.H=HH;HOUSES.push(HH);
     /* keep the world's random sequence identical to the old solid houses */
     for(let i=(stilt?6:1)+1+(kind==='desert'?2:1+(kind==='frost'?1:0)+(kind==='swamp'?0:1))+2+4;i>0;i--)rand();
   }
@@ -1312,6 +1313,7 @@ async function build(){
       const lx=dx*H.c-dz*H.s,lz=dx*H.s+dz*H.c;
       for(const b of H.bx){
         if(walls&&!b[4])continue;
+        if(b[5]&&b[5].a>0.85)continue;
         const ex=Math.abs(lx-b[0])-b[2],ez=Math.abs(lz-b[1])-b[3];
         if(walls){if(ex<r&&ez<r&&py<H.fy+H.h+0.4)return true;continue}
         if(ex>=r||ez>=r||py>H.fy+3)continue;
@@ -1436,6 +1438,28 @@ async function build(){
     s=SV('Old Ruins');ruins(s.x,s.z);
     s=SV('Hunters Camp');fireRing(s.x,s.z,1.3);tent(s.x-4,s.z+1,0.5,'#4f6f8f');tent(s.x+3.5,s.z+3.5,-0.6,'#a8553a');tent(s.x+1,s.z-4.5,2.6,'#6c8a4a');
   }
+  /* ---- doors: one instanced mesh, each leaf swings on its hinge ---- */
+  const doorGeo=new THREE.BoxGeometry(1,1,1).translate(-0.5,0,0);
+  const doorMat=new THREE.MeshStandardMaterial({color:lin('#5a3d2a'),roughness:0.85,metalness:0});
+  const doorMesh=new THREE.InstancedMesh(doorGeo,doorMat,HOUSES.length);doorMesh.frustumCulled=false;doorMesh.castShadow=true;doorMesh.receiveShadow=true;scene.add(doorMesh);
+  const _dM=new THREE.Matrix4(),_dH=new THREE.Matrix4(),_dR=new THREE.Matrix4(),_dS=new THREE.Matrix4();
+  function doorUpd(H){
+    const d=H.door;_dH.makeRotationY(H.yaw);_dH.setPosition(H.x,H.y,H.z);
+    _dM.makeTranslation(d.hx,d.hy,d.hz);_dR.makeRotationY(-d.a);_dS.makeScale(d.len,2.0,0.06);
+    _dH.multiply(_dM).multiply(_dR).multiply(_dS);doorMesh.setMatrixAt(H.i,_dH);doorMesh.instanceMatrix.needsUpdate=true;
+  }
+  HOUSES.forEach(doorUpd);
+  function setDoor(H,open,quiet){
+    const d=H.door,nt=open?1.45:0;if(d.t===nt)return;d.t=nt;d.auto=open?performance.now()/1000+40:0;
+    if(!quiet&&ac&&soundOn){const dd=Math.hypot(eyeV.x-H.x,eyeV.z-H.z);if(dd<30){const v=0.16*Math.max(0,1-dd/30);nz(ac.currentTime,0.32,v,260,0);tn(ac.currentTime,open?150:110,open?190:80,0.24,'sawtooth',v*0.6,0)}}
+  }
+  function toggleDoor(H){const o=H.door.t<0.7;setDoor(H,o);sendEv(null,{k:'door',h:H.i,o:o?1:0});toast(o?'Door opened':'Door closed')}
+  extraTick.push((T,dt)=>{
+    const now=performance.now()/1000;
+    for(const H of HOUSES){const d=H.door;
+      if(d.auto&&now>d.auto)setDoor(H,false,true);
+      if(d.a!==d.t){const st=3.6*dt,df=d.t-d.a;d.a=Math.abs(df)<=st?d.t:d.a+Math.sign(df)*st;doorUpd(H)}}
+  });
   /* desert, swamp and frost decoration */
   {
     let n=0,t=0;
@@ -1851,6 +1875,11 @@ async function build(){
       if(!it.alive)continue;const dx=it.x-px,dz=it.z-pz,dd=dx*dx+dz*dz;if(dd>9||dd>=bd*bd)continue;
       if(it.y-py>4.2||py-it.y>2.5)continue;bd=Math.sqrt(dd);best={it};
     }
+    for(const H of HOUSES){
+      const dx0=eyeV.x-H.x,dz0=eyeV.z-H.z;if(dx0*dx0+dz0*dz0>H.br*H.br)continue;
+      const wx=H.x+H.d/2*H.s,wz=H.z+H.d/2*H.c,dd=Math.hypot(eyeV.x-wx,eyeV.z-wz);
+      if(dd<2.1&&dd<bd+0.9&&Math.abs(py-H.fy)<2.2){bd=Math.max(0,dd-0.9);best={door:H}}
+    }
     return best;
   }
   function pickUp(c){
@@ -1867,11 +1896,12 @@ async function build(){
     if((bag.n[t]||0)<1)heldSel=0;bagUI();return true;
   }
   function releaseAnimal(a,x,z){const W=Date.now()/1000;a.hx=x-a.ax*Math.sin(a.w1*W+a.p1);a.hz=z-a.az*Math.sin(a.w2*W+a.p2);a.taken=false}
-  function grab(){if(typeof fishing!=='undefined'&&fishing){reelIn();return}cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else pickUp(cand);cand=findCand();hintUI()}
+  function grab(){if(typeof fishing!=='undefined'&&fishing){reelIn();return}cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else if(cand.door)toggleDoor(cand.door);else pickUp(cand);cand=findCand();hintUI()}
   function hintUI(){
     const h=$('#grabHint'),gb=$('#grabBtn');if(!h)return;
     let t='';
-    if(cand){t=cand.a?('Pick up '+ANI_NAME[ANI_CODE[cand.a.kind]].join(' ')):('Pick up '+ITEMS[cand.it.t].e+' '+ITEMS[cand.it.t].n)}
+    if(cand&&cand.door)t=(cand.door.door.t<0.7?'Open':'Close')+' door';
+    else if(cand){t=cand.a?('Pick up '+ANI_NAME[ANI_CODE[cand.a.kind]].join(' ')):('Pick up '+ITEMS[cand.it.t].e+' '+ITEMS[cand.it.t].n)}
     else if(heldCode()){t='Drop '+(heldAnimal>=0?ANI_NAME[heldCode()].join(' '):ITEMS[heldCode()].e+' '+ITEMS[heldCode()].n)}
     h.textContent=t;h.classList.toggle('off',!t||mode!=='walk');gb.classList.toggle('hot',!!cand);
   }
@@ -1880,15 +1910,17 @@ async function build(){
   function onEv(from,d){
     if(!d)return;
     if(d.k==='take'){const it=d.u?dynMap.get(d.u):items[d.i];if(it&&it.alive)takeItem(it,!it.dyn)}
-    else if(d.k==='put'){if(!dynMap.has(d.u)||!dynMap.get(d.u).alive)dropItem(d.t,+d.x,+d.z,d.u)}
+    else if(d.k==='put'){for(const q of shots)if(q.uid===d.u)q.dead=true;if(!dynMap.has(d.u)||!dynMap.get(d.u).alive)dropItem(d.t,+d.x,+d.z,d.u)}
     else if(d.k==='gtake'){const a=animals[d.a|0];if(a)a.taken=true}
     else if(d.k==='gkeep'){const a=animals[d.a|0];if(a){a.taken=true;a.kept=Date.now()+300000}}
     else if(d.k==='gput'){const a=animals[d.a|0];if(a)releaseAnimal(a,+d.x,+d.z)}
     else if(d.k==='knock'){const it=items[d.i|0];if(it&&it.hang){it.hang=false;it.fall=0.001}}
+    else if(d.k==='door'){const H=HOUSES[d.h|0];if(H)setDoor(H,!!d.o)}
+    else if(d.k==='thr'){if(ITEMS[d.t|0])launch(d.t|0,+d.x,+d.y,+d.z,+d.vx,+d.vy,+d.vz,d.u,false)}
     else if(d.k==='fire'){buildFire(d.x,d.z,d.e,d.u)}
     else if(d.k==='give'&&d.to===myId){const t=d.t|0;if(ITEMS[t]){addBag(t,1);const r=remotes.get(from);toast((r?r.pf.n:'A friend')+' gave you '+ITEMS[t].e+' '+ITEMS[t].n)}}
   }
-  window.__items={onEv,items,bag,grab,findCand,addBag,ITEMS,get held(){return heldSel},hold(i){heldSel=i}};
+  window.__items={onEv,items,bag,grab,findCand,throwHeld:()=>throwHeld(),shots:()=>shots,stepShot,addBag,ITEMS,get held(){return heldSel},hold(i){heldSel=i}};
   /* held object on an avatar's right hand */
   const heldAniMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.95});
   function syncHeld(av,code){
@@ -1904,7 +1936,7 @@ async function build(){
     if(myG!==gEff.g)gEff={g:myG,done:false};
     if(!myG||gEff.done)return;const t=myGT;
     if(myG===9&&t>1.5){gEff.done=true;const id=heldSel;if(heldAnimal<0&&id&&ITEMS[id]&&ITEMS[id].eat&&(bag.n[id]||0)>0){addBag(id,-1);if((bag.n[id]||0)<1)heldSel=0;critter('crunch',0.25,0);toast('Yum! '+ITEMS[id].e+' '+ITEMS[id].n)}else toast('Nothing to eat in your hand')}
-    else if(myG===8&&t>0.55){gEff.done=true;if(!dropHeld(true))toast('Nothing to throw')}
+    else if(myG===8&&t>0.55){gEff.done=true;if(heldAnimal>=0){if(!dropHeld(true))toast('Nothing to throw')}else if(!throwHeld())toast('Nothing to throw')}
     else if(myG===10&&t>0.7){gEff.done=true;giveNearest()}
     else if(myG===16&&t>1.2){gEff.done=true;drinkNow()}
     else if(myG===17&&t>0.75){gEff.done=true;castNow()}
@@ -1922,6 +1954,68 @@ async function build(){
     addBag(t,-1);if((bag.n[t]||0)<1)heldSel=0;sendEv(r.id,{k:'give',to:r.id,t});toast('You gave '+ITEMS[t].e+' '+ITEMS[t].n+' to '+r.pf.n);bagUI();
   }
   function giveNearest(){const p=nearbyPeople();if(!p.length){toast('Nobody close enough');return}giveTo(p[0].r)}
+  /* ---- thrown items: real projectile physics (gravity, drag, bounces, walls, trees, water) ---- */
+  const shots=[],THROW_V=14;
+  function aimVec(){const el=Math.max(-0.3,Math.min(1.05,pitch+0.26)),c=Math.cos(el);return[-Math.sin(yaw)*c*THROW_V,Math.sin(el)*THROW_V,-Math.cos(yaw)*c*THROW_V]}
+  function launch(t,x,y,z,vx,vy,vz,uid,mine){
+    const m=new THREE.Mesh(ITEMS[t].geo,itemMat);m.castShadow=true;m.position.set(x,y,z);scene.add(m);
+    shots.push({t,x,y,z,vx,vy,vz,uid,mine,m,sx:(Math.random()-0.5)*16,sz:(Math.random()-0.5)*16,age:0,rest:false,dead:false});
+  }
+  function throwHeld(){
+    const t=heldSel;if(!t||(bag.n[t]||0)<1)return false;
+    const [vx,vy,vz]=aimVec(),x=eyeV.x-Math.sin(yaw)*0.45,y=eyeV.y-0.2,z=eyeV.z-Math.cos(yaw)*0.45,uid=myId+'.'+(dynN++);
+    addBag(t,-1);if((bag.n[t]||0)<1)heldSel=0;bagUI();
+    launch(t,x,y,z,vx,vy,vz,uid,true);sendEv(null,{k:'thr',t,x:+x.toFixed(2),y:+y.toFixed(2),z:+z.toFixed(2),vx:+vx.toFixed(2),vy:+vy.toFixed(2),vz:+vz.toFixed(2),u:uid});
+    if(ac&&soundOn)nz(ac.currentTime,0.22,0.1,1400,0);
+    return true;
+  }
+  function shotSolid(x,z,y){
+    if(houseHit(x,z,0.08,y,true))return true;
+    if(y>5)return false;
+    const cx=Math.floor(x/CELL),cz=Math.floor(z/CELL);
+    for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const arr=grid.get(gkey(cx+a,cz+b));if(!arr)continue;
+      for(let k=0;k<arr.length;k+=3){const dx=x-arr[k],dz=z-arr[k+1],r=arr[k+2];if(dx*dx+dz*dz<r*r)return true}}
+    return false;
+  }
+  function thud(v){if(ac&&soundOn&&v>0.02){const dd=1;nz(ac.currentTime,0.07,Math.min(0.14,v),420,0)}}
+  function stepShot(s,h){
+    s.vy-=9.8*h;const dr=Math.exp(-0.12*h);s.vx*=dr;s.vz*=dr;
+    const nx=s.x+s.vx*h,ny=s.y+s.vy*h,nz2=s.z+s.vz*h;
+    if(shotSolid(nx,nz2,ny)){s.vx*=-0.35;s.vz*=-0.35;s.vy*=0.6;thud(0.06)}else{s.x=nx;s.y=ny;s.z=nz2}
+    const g=groundAt(s.x,s.z)+0.05;
+    if(s.y<g){
+      if(isWater(s.x,s.z)&&floorAt(s.x,s.z)<-50){s.water=true;s.dead=true;return}
+      s.y=g;
+      if(Math.abs(s.vy)>1.6){thud(Math.abs(s.vy)*0.012);s.vy=-s.vy*0.38;s.vx*=0.68;s.vz*=0.68;s.sx*=0.5;s.sz*=0.5}
+      else{s.vy=0;const f=Math.exp(-7*h);s.vx*=f;s.vz*=f;s.sx*=f;s.sz*=f;if(Math.hypot(s.vx,s.vz)<0.35)s.rest=true}
+    }
+  }
+  const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({length:36},()=>new THREE.Vector3())),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.55,depthTest:false,fog:false}));
+  aimLine.frustumCulled=false;aimLine.visible=false;aimLine.renderOrder=9;scene.add(aimLine);
+  extraTick.push((T,dt)=>{
+    /* trajectory preview while winding up a throw */
+    const show=mode==='walk'&&myG===8&&heldAnimal<0&&heldSel&&(bag.n[heldSel]||0)>0&&myGT<0.6;
+    if(show){
+      const [vx,vy,vz]=aimVec(),P=aimLine.geometry.attributes.position;let x=eyeV.x-Math.sin(yaw)*0.45,y=eyeV.y-0.2,z=eyeV.z-Math.cos(yaw)*0.45,u=vx,v=vy,w=vz,n=0;
+      for(let i=0;i<36;i++){P.setXYZ(i,x,y,z);n=i;const h=0.05;v-=9.8*h;x+=u*h;y+=v*h;z+=w*h;if(y<groundAt(x,z)){P.setXYZ(i,x,groundAt(x,z)+0.05,z);for(let j=i+1;j<36;j++)P.setXYZ(j,x,groundAt(x,z)+0.05,z);break}}
+      P.needsUpdate=true;aimLine.visible=true;
+    }else aimLine.visible=false;
+    for(let i=shots.length-1;i>=0;i--){
+      const s=shots[i];s.age+=dt;
+      if(!s.rest&&!s.dead){let rem=Math.min(dt,0.1);while(rem>0&&!s.rest&&!s.dead){const h=Math.min(rem,1/90);rem-=h;stepShot(s,h)}}
+      if(s.rest&&!s.dead){
+        if(s.mine){const it=dropItem(s.t,s.x,s.z,s.uid,s.y);sendEv(null,{k:'put',t:s.t,x:+s.x.toFixed(2),z:+s.z.toFixed(2),u:s.uid});s.dead=true;s.landed=true}
+        else if(s.age>9){dropItem(s.t,s.x,s.z,s.uid,s.y);s.dead=true;s.landed=true}
+      }
+      if(s.dead){
+        if(s.water){if(s.mine)toast('Splash! It sank');if(ac&&soundOn)nz(ac.currentTime,0.35,0.1,700,0)}
+        scene.remove(s.m);shots.splice(i,1);continue;
+      }
+      s.m.position.set(s.x,s.y,s.z);
+      if(!s.rest){s.m.rotation.x+=s.sx*dt;s.m.rotation.z+=s.sz*dt}
+      if(s.age>14){s.dead=true}
+    }
+  });
   /* every frame */
   extraTick.push((T,dt,cam)=>{
     if(mode!=='walk')return;
@@ -3569,7 +3663,7 @@ async function build(){
     myG=myG===i&&i===5?0:i;myGT=0;
     if(myG){const pop=$('#emoji');pop.textContent=GEST[i].e;pop.classList.remove('pop');void pop.offsetWidth;pop.classList.add('pop');setTip(GEST[i].n+(i===5?' — move to stand up':''))}
   }
-  window.addEventListener('keydown',e=>{if(mode!=='walk'||e.repeat)return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;const m=/^Digit([1-6])$/.exec(e.code);if(m)doGesture(+m[1])});
+  window.addEventListener('keydown',e=>{if(mode!=='walk'||e.repeat)return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;const m=/^Digit([1-6])$/.exec(e.code);if(m)doGesture(+m[1]);else if(e.code==='KeyT')doGesture(8)});
   function netTick(dt){
     if(mode==='walk'){updateMyAvatar(dt);itemGesture()}
     mapT+=dt;if(mapT>0.1&&mode==='walk'){mapT=0;drawMini();if(bigOpen){drawBig();listT+=0.1;if(listT>1){listT=0;fillList()}}}

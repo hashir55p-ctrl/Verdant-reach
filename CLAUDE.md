@@ -47,3 +47,7 @@ Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek,
 - Face: big layered eyes in groups `userData.eyes` (blink in `poseAvatar`), blush, tiny nose/mouth. Hair styles Messy/Wavy/Bob use tapered `avSpike`/tube locks. Explorer top = vest + bandolier + belt pouches; Cargo pants, boots, fingerless gloves, scarf, cloak, hair flower, richer backpack.
 - Secondary motion: `userData.sec` groups (scarf tails, cloak) sway and trail backwards with speed; walk has bob, hip twist, lean and elbow bend; idle breathing.
 - Creator has a Presets tab (Wanderer, Scout, Scholar, Survivor, Nomad, Forestborn, Artisan, Ranger). Keep new profile fields in `DEF`/`LEN` and in `FIELDS`.
+
+## Doors and thrown items
+- Doors: one `InstancedMesh` (`doorMesh`), each house has `H.door={a,t,...}`; `setDoor`/`toggleDoor`, swing animated in an `extraTick`, auto-closes after 40 s, event `{k:'door',h,o}`. Closed doors are collision/camera walls (`b[5]` in `houseHit`). Doors show as a Grab candidate ("Open door"/"Close door").
+- Throwing: gesture 8 (key T) calls `throwHeld()` → `launch()` projectile (`shots`, gravity, drag, bounces, walls/trees via `shotSolid`, water sinks it). Thrower sends `{k:'thr'}` (others simulate the flight) and `{k:'put'}` when it comes to rest, which creates the pickable item. Aim preview line shows during wind-up.
