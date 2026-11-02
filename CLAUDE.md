@@ -51,3 +51,6 @@ Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek,
 ## Doors and thrown items
 - Doors: one `InstancedMesh` (`doorMesh`), each house has `H.door={a,t,...}`; `setDoor`/`toggleDoor`, swing animated in an `extraTick`, auto-closes after 40 s, event `{k:'door',h,o}`. Closed doors are collision/camera walls (`b[5]` in `houseHit`). Doors show as a Grab candidate ("Open door"/"Close door").
 - Throwing: gesture 8 (key T) calls `throwHeld()` → `launch()` projectile (`shots`, gravity, drag, bounces, walls/trees via `shotSolid`, water sinks it). Thrower sends `{k:'thr'}` (others simulate the flight) and `{k:'put'}` when it comes to rest, which creates the pickable item. Aim preview line shows during wind-up.
+
+## 360° view
+- Eye button `#orbBtn` (key O) toggles `orb` orbit camera (`setOrbit`, `applyOrbit`): drag rotates around your character, wheel/pinch zooms, auto-spins after 2.5 s idle, any movement exits. Camera stays out of terrain and house walls.

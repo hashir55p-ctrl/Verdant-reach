@@ -70,6 +70,7 @@ button:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .col{display:flex;flex-direction:column;gap:12px}
 .rb{width:58px;height:58px;border-radius:50%;color:var(--text);font:500 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;padding:0}
 .rb.big{width:80px;height:80px;font-size:12px}
+.ib[aria-pressed="true"]{background:var(--sun);color:var(--sun-ink);border-color:var(--sun)}
 .rb[aria-pressed="true"]{background:var(--sun);color:var(--sun-ink);border-color:var(--sun)}
 #tip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 34px);margin:0;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;border-radius:999px;padding:10px 16px;font:400 11.5px/1 var(--mono);color:var(--text);transition:opacity 1s ease}
 #tip.off{opacity:0}
@@ -324,6 +325,7 @@ button{font-family:inherit}
     <div class="topbtns">
       <button id="micBtn" class="ctl pill glass off" type="button" aria-pressed="false" aria-label="Toggle your microphone">Mic off</button>
       <button id="invBtn" class="ctl pill glass off" type="button" aria-label="Invite friends">Invite</button>
+      <button id="orbBtn" class="ctl ib glass" type="button" aria-pressed="false" aria-label="360 degree view of your character"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
       <button id="bagBtn" class="ctl ib glass" type="button" aria-label="Open your collection"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1.2 10.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 9zM8.5 9a3.5 3.5 0 0 1 7 0"/></svg></button>
       <button id="menuBtn" class="ctl ib glass" type="button" aria-label="Open menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
@@ -2476,22 +2478,41 @@ async function build(){
     camera.position.set(P.x,eye,P.z);
     eyeV.copy(camera.position);
     camera.rotation.set(pitch,yaw,0);
-    if(tpp)applyTPP();
+    if(orb.on){
+      if(Math.abs(fx)+Math.abs(fz)>0.15||jumpHeld||keys.has('Space'))setOrbit(false);
+      else{orb.idle+=dt;if(orb.idle>2.5&&pts.size===0)orb.ay+=0.35*dt;applyOrbit()}
+    }
+    if(!orb.on&&tpp)applyTPP();
   }
 
   /* input */
   let lookId=null,lx=0,ly=0;
+  const pts=new Map();let pinch0=0;
+  const pinchD=()=>{const a=[...pts.values()];return a.length<2?0:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])};
+  const orb={on:false,ay:0,ap:0.12,d:3.4,idle:0};
+  function setOrbit(on){
+    orb.on=on;$('#orbBtn').setAttribute('aria-pressed',String(on));
+    if(on){orb.ay=yaw;orb.ap=0.12;orb.d=3.4;orb.idle=0;if(typeof toast==='function')toast('360° view: drag to rotate, pinch or scroll to zoom. Move to exit')}
+  }
+  $('#orbBtn').addEventListener('click',()=>setOrbit(!orb.on));
+  window.addEventListener('keydown',e=>{if(mode==='walk'&&!e.repeat&&e.code==='KeyO'){const t=e.target&&e.target.tagName;if(t!=='INPUT')setOrbit(!orb.on)}});
   canvas.addEventListener('pointerdown',e=>{
     if(mode!=='walk')return;
+    pts.set(e.pointerId,[e.clientX,e.clientY]);if(pts.size===2)pinch0=pinchD();orb.idle=0;
     lookId=e.pointerId;lx=e.clientX;ly=e.clientY;
     try{canvas.setPointerCapture(e.pointerId)}catch(_){}
     canvas.focus({preventScroll:true});
   });
   canvas.addEventListener('pointermove',e=>{
+    if(pts.has(e.pointerId))pts.set(e.pointerId,[e.clientX,e.clientY]);
+    if(orb.on&&pts.size>=2){const d=pinchD();if(pinch0>0&&d>0){orb.d=clamp(orb.d*pinch0/d,1.2,7);pinch0=d}orb.idle=0;lx=e.clientX;ly=e.clientY;return}
     if(e.pointerId!==lookId)return;
-    yaw-=(e.clientX-lx)*0.0052;pitch=clamp(pitch-(e.clientY-ly)*0.0052,-1.4,1.4);lx=e.clientX;ly=e.clientY;
+    if(orb.on){orb.ay-=(e.clientX-lx)*0.0052;orb.ap=clamp(orb.ap+(e.clientY-ly)*0.0052,-0.45,1.45);orb.idle=0}
+    else{yaw-=(e.clientX-lx)*0.0052;pitch=clamp(pitch-(e.clientY-ly)*0.0052,-1.4,1.4)}
+    lx=e.clientX;ly=e.clientY;
   });
-  const endLook=e=>{if(e.pointerId===lookId)lookId=null};
+  canvas.addEventListener('wheel',e=>{if(!orb.on)return;orb.d=clamp(orb.d*(1+Math.sign(e.deltaY)*0.1),1.2,7);orb.idle=0;e.preventDefault()},{passive:false});
+  const endLook=e=>{pts.delete(e.pointerId);pinch0=0;if(e.pointerId===lookId)lookId=null};
   canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 
   const stick=$('#stick'),nub=$('#nub'),SR=44;let sid=null,scx=0,scy=0;
@@ -3521,6 +3542,12 @@ async function build(){
     for(let q=1;q>0.2;q-=0.25){const tt=t*q,f=tt/dist;if(houseHit(eyeV.x-dx*tt+rx*0.5*f,eyeV.z-dz*tt+rz*0.5*f,0.3,eyeV.y+0.3-dy*tt,true))return true}
     return false;
   }
+  function applyOrbit(){
+    const tx=eyeV.x,ty=eyeV.y-0.55,tz=eyeV.z,ca=Math.cos(orb.ap),dx=Math.sin(orb.ay)*ca,dy=Math.sin(orb.ap),dz=Math.cos(orb.ay)*ca;
+    let d=orb.d,px,py2,pz;
+    for(let k=0;k<9;k++){px=tx+dx*d;py2=ty+dy*d;pz=tz+dz*d;if(py2>Math.max(heightAt(px,pz),-0.9)+0.25&&!houseHit(px,pz,0.3,py2,true))break;d*=0.85}
+    tpDist=d;camera.position.set(px,py2,pz);camera.lookAt(tx,ty,tz);
+  }
   function applyTPP(){
     const cp=Math.cos(pitch),dx=-Math.sin(yaw)*cp,dy=Math.sin(pitch),dz=-Math.cos(yaw)*cp,rx=Math.cos(yaw),rz=-Math.sin(yaw);
     const dist=flying?6:3.8;let t=dist;
@@ -3542,7 +3569,7 @@ async function build(){
   function updateMyAvatar(dt){
     const key=JSON.stringify(cleanProf(me));
     if(!myAv||myAvKey!==key){if(myAv){scene.remove(myAv)}myAv=makeAvatar(me);myAvKey=key;myBub=null;scene.add(myAv)}
-    myAv.visible=tpp&&tpDist>1.2;
+    myAv.visible=(tpp||orb.on)&&tpDist>1.2;
     if(!myAv.visible)return;
     const sp=Math.hypot(vx,vz);myPh+=sp*dt*1.9;
     const amt=Math.min(1,sp/3.5),sw=Math.sin(myPh)*0.75*amt;
@@ -3933,7 +3960,7 @@ async function build(){
   }
   applyTime();
   frame();
-  window.__verdant={houses:HOUSES,eyeV:()=>eyeV,world:{heightAt,riverD,forestMask,zoneW,FROST,DESERT,SWAMP,SITES,R},poseAvatar,GEST,critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
+  window.__verdant={houses:HOUSES,eyeV:()=>eyeV,world:{heightAt,riverD,forestMask,zoneW,FROST,DESERT,SWAMP,SITES,R},poseAvatar,GEST,critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},orbit:(on,ay,ap,d)=>{setOrbit(on);if(ay!=null)orb.ay=ay;if(ap!=null)orb.ap=ap;if(d!=null)orb.d=d;orb.idle=-99},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
   $('#veil').classList.add('gone');
 }
 
