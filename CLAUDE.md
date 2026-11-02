@@ -57,3 +57,8 @@ Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek,
 
 ## Crafting
 - Fishing rod: 2 Sticks (20) + 1 Vine (30, new item scattered in forests, swamp and river banks with its own RNG 4711) via `craftRod()`; button appears in the bag on Stick/Vine/Rod. Rods can still be found lying near towns.
+
+## Tree chopping, wood and tents
+- Items: Axe 31, Log 32, Tent 33 (Stick 20, Vine 30, Stone 21). Generic crafting: `RECIPES` + `craft(id)` (rod = 2 Stick + 1 Vine; axe = 1 Stick + 1 Stone + 1 Vine; tent = 4 Log + 2 Vine). Bag shows a Craft button for any recipe the selected item takes part in.
+- Chopping: Swing gesture (7) calls `chopTry()`; each tree has `id`, canopy/trunk instance (`cm/ci`, `tm/ti`). No axe: knocks up to 3 sticks off a tree. With axe: `hp` swings, then `fellTree` (hides instances, moves its `grid` collision entry to 1e9, falling-animation clone meshes, stump) and `spawnDrops` (logs + sticks via `dropItem` + `put` events). Event `{k:'fell',i,fx,fz}`. Trees regrow after ~7 min (`regrow`).
+- Tents: `makeTent(uid,x,z,yaw,colour)` pushes a `HOUSES` entry with `tent:true`, `dead` flag (never spliced; every HOUSES loop skips `dead`). Placed with `placeTent()` (bag button), packed with Grab (`packTent`). Events `tent` / `tentx`. Tent and felled-tree state is session-only (late joiners do not see them).

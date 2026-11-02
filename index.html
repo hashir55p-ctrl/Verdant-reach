@@ -1055,6 +1055,7 @@ async function build(){
     const pine=zf>0.3?rand()<0.95:rand()<(th>18?0.9:0.35);
     trees.push({x,z,h:th,s:pine?0.85+rand()*0.7:0.9+rand()*0.55,ry:rand()*6.28,leanX:(rand()-0.5)*0.045,leanZ:(rand()-0.5)*0.045,crownX:pine?0.92+rand()*0.16:0.84+rand()*0.32,crownZ:pine?0.92+rand()*0.16:0.84+rand()*0.32,pine,v:rand()<0.5?0:1});
   }
+  trees.forEach((t,i)=>t.id=i);
   const pineGeos=[buildPine(11,10,1.8,9.2,3.2,11),buildPine(23,9,1.6,8.0,2.8,11)];
   // More overlapping, differently oriented foliage cards give canopies a fuller 3D silhouette.
   const broadGeos=[buildBroad(5,3.0,2.5,3.0,5.4,88,2.4),buildBroad(9,2.6,3.2,2.6,5.8,84,2.3)];
@@ -1077,14 +1078,14 @@ async function build(){
         else if(g<-0.22)tc.setHSL(0.03+rand()*0.1,0.75,0.58+rand()*0.1);
         else tc.setHSL(0.26+rand()*0.07,0.5,0.45+rand()*0.1);
       }
-      tc.convertSRGBToLinear();m.setColorAt(ix,tc);
+      tc.convertSRGBToLinear();m.setColorAt(ix,tc);t.cm=m;t.ci=ix;t.col=tc.clone();
       addCol(t.x,t.z,0.5*t.s);
     });
     m.castShadow=true;fin(m);return m;
   });
   [[pineTr,pineTrunkGeo],[broadTr,broadTrunkGeo]].forEach(([list,geo])=>{
     const m=inst(geo,barkMat,Math.max(1,list.length));m.count=list.length;
-    list.forEach((t,ix)=>put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,t.leanX,t.ry,t.leanZ));
+    list.forEach((t,ix)=>{put(m,ix,t.x,t.h-0.5,t.z,t.s,t.s,t.s,t.leanX,t.ry,t.leanZ);t.tm=m;t.ti=ix});
     m.castShadow=true;m.receiveShadow=true;fin(m);
   });
 
@@ -1304,7 +1305,7 @@ async function build(){
   const homeLight=new THREE.PointLight(0xffc27a,0,11,1.6);homeLight.castShadow=false;scene.add(homeLight);let homeK=0;
   extraTick.push((T,dt)=>{
     let H=null;const px=eyeV.x,pz=eyeV.z,py=eyeV.y-1.7;
-    for(const q of HOUSES){const dx=px-q.x,dz=pz-q.z;if(dx*dx+dz*dz>q.br*q.br)continue;
+    for(const q of HOUSES){if(q.dead)continue;const dx=px-q.x,dz=pz-q.z;if(dx*dx+dz*dz>q.br*q.br)continue;
       const lx=dx*q.c-dz*q.s,lz=dx*q.s+dz*q.c;if(Math.abs(lx)<q.w/2-0.2&&Math.abs(lz)<q.d/2-0.2&&py>q.fy-0.5&&py<q.fy+q.h){H=q;break}}
     if(H)homeLight.position.set(H.x+0.2*H.s,H.fy+H.h-0.7,H.z+0.2*H.c);
     homeK+=((H?1:0)-homeK)*Math.min(1,dt*5);
@@ -1312,6 +1313,7 @@ async function build(){
   });
   function houseHit(px,pz,r,py,walls){
     for(const H of HOUSES){
+      if(H.dead)continue;
       const dx=px-H.x,dz=pz-H.z;if(dx*dx+dz*dz>H.br*H.br)continue;
       const lx=dx*H.c-dz*H.s,lz=dx*H.s+dz*H.c;
       for(const b of H.bx){
@@ -1793,6 +1795,9 @@ async function build(){
   def(28,'Crystal','💎','thing',0,'Glows faintly. Rare.',()=>[[ICone(6),'#6fd0ff',[0,0.1,0],[0.05,0.12,0.05]],[ICone(6),'#4fb4f0',[0,-0.02,0],[0.05,0.1,0.05],[Math.PI,0,0]],[ICone(5),'#8fe0ff',[0.05,0.04,0.02],[0.025,0.08,0.025],[0,0,-0.4]]]);
   const fishP=(c1,c2,L,belly)=>()=>[[IS(10,8),c1,[0,0.04,0],[L,L*0.3,L*0.17]],[IS(8,6),belly||c1,[0.01*L,0.015,0],[L*0.85,L*0.2,L*0.15]],[ICone(4),c2,[-L*1.05,0.04,0],[L*0.34,L*0.42,0.012],[0,0,Math.PI/2]],[IS(5,4),c2,[0,0.04+L*0.3,0],[L*0.3,L*0.18,0.01]],[IS(5,4),'#101010',[L*0.78,0.06,L*0.12],[0.012,0.012,0.012]]];
   def(30,'Vine','🌿','thing',0,'Tough green string. Craft a rod: 2 Sticks + 1 Vine.',()=>[[new THREE.TorusGeometry(1,0.14,5,12),'#4f8a3a',[0,0.02,0],[0.1,0.1,0.1],[Math.PI/2,0,0]],[new THREE.TorusGeometry(1,0.14,5,12),'#5aa044',[0.02,0.06,0.01],[0.08,0.08,0.08],[Math.PI/2,0.3,0]],leaf(0.08,0.05),leaf(-0.07,0.03)]);
+  def(31,'Axe','🪓','tool',0,'Swing it at a tree to chop it down. Craft: 1 Stick + 1 Stone + 1 Vine.',()=>[[IC(6),'#7b5a3a',[0,0.28,0],[0.016,0.56,0.016]],[new THREE.BoxGeometry(1,1,1),'#8a9098',[0.06,0.5,0],[0.14,0.1,0.034]],[new THREE.BoxGeometry(1,1,1),'#d9dde2',[0.14,0.5,0],[0.02,0.13,0.034]]]);
+  def(32,'Log','🌳','thing',0,'Fresh-cut wood. 4 Logs + 2 Vines make a tent.',()=>[[IC(8),'#7b5a3a',[0,0.1,0],[0.09,0.5,0.09],[0,0,Math.PI/2]],[IC(8),'#d9b98a',[0.255,0.1,0],[0.07,0.012,0.07],[0,0,Math.PI/2]],[IC(8),'#d9b98a',[-0.255,0.1,0],[0.07,0.012,0.07],[0,0,Math.PI/2]]]);
+  def(33,'Tent','⛺','tool',0,'Place it to make your own shelter. Grab it to pack up. Craft: 4 Logs + 2 Vines.',()=>[[ICone(4),'#c8553a',[0,0.14,0],[0.17,0.28,0.17],[0,Math.PI/4,0]],[new THREE.BoxGeometry(1,1,1),'#3a4a35',[0,0.01,0],[0.22,0.02,0.22]]]);
   def(29,'Fishing Rod','🎣','tool',0,'Face the water, cast, and press Grab when it bites. Craft one: 2 Sticks + 1 Vine.',()=>[[IC(5),'#6b4a2a',[0,0.4,0],[0.011,0.8,0.011]],[IC(6),'#2a2a2a',[0,0.04,0],[0.02,0.16,0.02]],[IS(7,5),'#b0b4ba',[0.03,0.14,0],[0.03,0.03,0.014]]]);
   def(50,'Sardine','🐟','fish',0,'Small and silvery. Sea.',fishP('#9fb4c4','#6f8696',0.1,'#dfe8ee'));
   def(51,'Mackerel','🐟','fish',0,'Striped and quick. Sea.',fishP('#3f6f8a','#2d5268',0.15,'#cfe0e8'));
@@ -1809,7 +1814,7 @@ async function build(){
   def(63,'Roast Rabbit','🍖','food',1,'Tender and smoky.',roastP('#9a5a28'));
   def(64,'Roast Chicken','🍗','food',1,'Golden and juicy.',roastP('#c07a30'));
   def(65,'Roast Duck','🍗','food',1,'Rich and crispy.',roastP('#8a4a22'));
-  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23,60,61,62,63,64,65],THING_IDS=[20,21,22,24,25,26,27,28,30,29],FISH_IDS=[50,51,52,53,54,55,56,57];
+  const FRUIT_IDS=[1,2,3,4,5,6,7,8,9,10,11,12,23,60,61,62,63,64,65],THING_IDS=[20,32,21,22,24,25,26,27,28,30,29,31,33],FISH_IDS=[50,51,52,53,54,55,56,57];
   const itemMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.62,metalness:0});
   for(const id in ITEMS){const it=ITEMS[id];it.geo=cgeo(it.parts())}
   /* where things lie */
@@ -1882,9 +1887,10 @@ async function build(){
       if(it.y-py>4.2||py-it.y>2.5)continue;bd=Math.sqrt(dd);best={it};
     }
     for(const H of HOUSES){
+      if(H.dead)continue;
       const dx0=eyeV.x-H.x,dz0=eyeV.z-H.z;if(dx0*dx0+dz0*dz0>H.br*H.br)continue;
-      const wx=H.x+H.d/2*H.s,wz=H.z+H.d/2*H.c,dd=Math.hypot(eyeV.x-wx,eyeV.z-wz);
-      if(dd<2.1&&dd<bd+0.9&&Math.abs(py-H.fy)<2.2){bd=Math.max(0,dd-0.9);best={door:H}}
+      const wx=H.x+H.d/2*H.s,wz=H.z+H.d/2*H.c,dd=H.tent?Math.max(0,Math.hypot(eyeV.x-H.x,eyeV.z-H.z)-1.2):Math.hypot(eyeV.x-wx,eyeV.z-wz);
+      if(dd<2.1&&dd<bd+0.9&&Math.abs(py-H.fy)<2.2){bd=Math.max(0,dd-0.9);best=H.tent?{tent:H}:{door:H}}
     }
     return best;
   }
@@ -1902,11 +1908,12 @@ async function build(){
     if((bag.n[t]||0)<1)heldSel=0;bagUI();return true;
   }
   function releaseAnimal(a,x,z){const W=Date.now()/1000;a.hx=x-a.ax*Math.sin(a.w1*W+a.p1);a.hz=z-a.az*Math.sin(a.w2*W+a.p2);a.taken=false}
-  function grab(){if(typeof fishing!=='undefined'&&fishing){reelIn();return}cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else if(cand.door)toggleDoor(cand.door);else pickUp(cand);cand=findCand();hintUI()}
+  function grab(){if(typeof fishing!=='undefined'&&fishing){reelIn();return}cand=findCand();if(!cand){if(!dropHeld(false))toast('Nothing in reach')}else if(cand.door)toggleDoor(cand.door);else if(cand.tent)packTent(cand.tent);else pickUp(cand);cand=findCand();hintUI()}
   function hintUI(){
     const h=$('#grabHint'),gb=$('#grabBtn');if(!h)return;
     let t='';
-    if(cand&&cand.door)t=(cand.door.door.t<0.7?'Open':'Close')+' door';
+    if(cand&&cand.tent)t='Pack up tent';
+    else if(cand&&cand.door)t=(cand.door.door.t<0.7?'Open':'Close')+' door';
     else if(cand){t=cand.a?('Pick up '+ANI_NAME[ANI_CODE[cand.a.kind]].join(' ')):('Pick up '+ITEMS[cand.it.t].e+' '+ITEMS[cand.it.t].n)}
     else if(heldCode()){t='Drop '+(heldAnimal>=0?ANI_NAME[heldCode()].join(' '):ITEMS[heldCode()].e+' '+ITEMS[heldCode()].n)}
     h.textContent=t;h.classList.toggle('off',!t||mode!=='walk');gb.classList.toggle('hot',!!cand);
@@ -1921,6 +1928,9 @@ async function build(){
     else if(d.k==='gkeep'){const a=animals[d.a|0];if(a){a.taken=true;a.kept=Date.now()+300000}}
     else if(d.k==='gput'){const a=animals[d.a|0];if(a)releaseAnimal(a,+d.x,+d.z)}
     else if(d.k==='knock'){const it=items[d.i|0];if(it&&it.hang){it.hang=false;it.fall=0.001}}
+    else if(d.k==='fell'){const t=trees[d.i|0];if(t&&!t.fell)fellTree(t,+d.fx,+d.fz,false)}
+    else if(d.k==='tent'){makeTent(d.u,+d.x,+d.z,+d.yaw,d.c|0)}
+    else if(d.k==='tentx'){const H=HOUSES.find(h=>h.uid===d.u&&!h.dead);if(H){H.dead=true;scene.remove(H.g)}}
     else if(d.k==='door'){const H=HOUSES[d.h|0];if(H)setDoor(H,!!d.o)}
     else if(d.k==='thr'){if(ITEMS[d.t|0])launch(d.t|0,+d.x,+d.y,+d.z,+d.vx,+d.vy,+d.vz,d.u,false)}
     else if(d.k==='fire'){buildFire(d.x,d.z,d.e,d.u)}
@@ -1948,9 +1958,9 @@ async function build(){
     else if(myG===17&&t>0.75){gEff.done=true;castNow()}
     else if(myG===18&&t>1.8){gEff.done=true;cookNow()}
     else if(myG===7&&t>0.5){
-      gEff.done=true;let n=0;const px=eyeV.x,pz=eyeV.z;
+      gEff.done=true;let n=0;const px=eyeV.x,pz=eyeV.z;const chopped=chopTry();
       for(const it of items){if(n>=3)break;if(!it.alive||!it.hang)continue;if(Math.hypot(it.x-px,it.z-pz)<4){it.hang=false;it.fall=0.001;sendEv(null,{k:'knock',i:it.i});n++}}
-      if(n)toast('Fruit tumbled down!');
+      if(n&&!chopped)toast('Fruit tumbled down!');
     }
   }
   function nearbyPeople(){const o=[];for(const r of remotes.values()){if(r.fresh)continue;const d=Math.hypot(r.x-eyeV.x,r.z-eyeV.z);if(d<8)o.push({r,d})}return o.sort((a,b)=>a.d-b.d)}
@@ -2022,6 +2032,109 @@ async function build(){
       if(s.age>14){s.dead=true}
     }
   });
+  /* ---- chopping trees, wood, and your own tents ---- */
+  const zeroM=new THREE.Matrix4().makeScale(0,0,0),fallers=[],regrow=[];
+  const _fq=new THREE.Quaternion(),_fa=new THREE.Vector3(),_fp=new THREE.Matrix4(),_fi=new THREE.Matrix4(),_fr=new THREE.Matrix4(),_fm=new THREE.Matrix4();
+  function treeCollider(t,on){
+    const arr=grid.get(gkey(Math.floor(t.x/CELL),Math.floor(t.z/CELL)));if(!arr)return;
+    if(on){for(let k=0;k<arr.length;k+=3)if(arr[k]===t.x&&arr[k+1]===t.z){t.garr=arr;t.gk=k;arr[k]=1e9;arr[k+1]=1e9;return}}
+    else if(t.garr){t.garr[t.gk]=t.x;t.garr[t.gk+1]=t.z;t.garr=null}
+  }
+  function dropMine(t,x,z){const uid=myId+'.'+(dynN++);if(dropItem(t,x,z,uid))sendEv(null,{k:'put',t,x:+x.toFixed(2),z:+z.toFixed(2),u:uid})}
+  function fellTree(t,fx,fz,mine){
+    if(t.fell)return;t.fell=true;t.regrow=nowS()+420;t.mine=!!mine;
+    t.cM=new THREE.Matrix4();t.cm.getMatrixAt(t.ci,t.cM);t.tM=new THREE.Matrix4();t.tm.getMatrixAt(t.ti,t.tM);
+    t.cm.setMatrixAt(t.ci,zeroM);t.tm.setMatrixAt(t.ti,zeroM);t.cm.instanceMatrix.needsUpdate=true;t.tm.instanceMatrix.needsUpdate=true;
+    treeCollider(t,true);
+    const cm=inst(t.pine?pineGeos[t.v]:broadGeos[t.v],t.pine?pineMat:broadMat,1),tm=inst(t.pine?pineTrunkGeo:broadTrunkGeo,barkMat,1);
+    cm.setColorAt(0,t.col);cm.castShadow=true;tm.castShadow=true;scene.add(cm);scene.add(tm);
+    const l=Math.hypot(fx,fz)||1;
+    t.stump=new THREE.Mesh(new THREE.CylinderGeometry(0.26*t.s,0.36*t.s,0.5,8),barkMat);t.stump.position.set(t.x,t.h-0.1,t.z);t.stump.castShadow=true;t.stump.receiveShadow=true;scene.add(t.stump);
+    fallers.push({t,cm,tm,fx:fx/l,fz:fz/l,a:0,age:0,hit:false});regrow.push(t);
+    if(ac&&soundOn){const d=Math.hypot(eyeV.x-t.x,eyeV.z-t.z);if(d<60)nz(ac.currentTime,0.5,0.12*Math.max(0,1-d/60),180,0)}
+  }
+  function regrowTree(t){
+    t.cm.setMatrixAt(t.ci,t.cM);t.tm.setMatrixAt(t.ti,t.tM);t.cm.instanceMatrix.needsUpdate=true;t.tm.instanceMatrix.needsUpdate=true;
+    treeCollider(t,false);if(t.stump){scene.remove(t.stump);t.stump=null}t.fell=false;t.hp=undefined;t.stk=0;
+  }
+  function spawnDrops(t,fx,fz){
+    const l=Math.hypot(fx,fz)||1;fx/=l;fz/=l;
+    const nl=2+(t.s>1.15?1:0)+(Math.random()<0.5?1:0),ns=1+(Math.random()*3|0);
+    for(let k=0;k<nl;k++){const d=1.3+k*1.25,x=t.x+fx*d+(Math.random()-0.5)*0.6,z=t.z+fz*d+(Math.random()-0.5)*0.6;dropMine(32,x,z)}
+    for(let k=0;k<ns;k++){const d=2.4+Math.random()*3,x=t.x+fx*d+(Math.random()-0.5)*1.6,z=t.z+fz*d+(Math.random()-0.5)*1.6;dropMine(20,x,z)}
+  }
+  function chopTry(){
+    if(heldAnimal>=0)return false;
+    const axe=heldSel===31&&(bag.n[31]||0)>0,px=eyeV.x,pz=eyeV.z,fx=-Math.sin(yaw),fz=-Math.cos(yaw);
+    let best=null,bd=1e9;
+    for(const t of trees){if(t.fell)continue;const dx=t.x-px,dz=t.z-pz,d=Math.hypot(dx,dz);if(d>2.9+0.5*t.s||d<0.01)continue;if((dx*fx+dz*fz)/d<0.35)continue;if(d<bd){bd=d;best=t}}
+    if(!best)return false;
+    const t=best;
+    if(ac&&soundOn){nz(ac.currentTime,0.09,0.16,axe?220:300,0);if(axe)nz(ac.currentTime+0.02,0.05,0.08,1400,0)}
+    if(axe){
+      if(t.hp===undefined)t.hp=Math.ceil(2+t.s*1.8);
+      t.hp--;
+      if(t.hp<=0){const ffx=t.x-px,ffz=t.z-pz;fellTree(t,ffx,ffz,true);sendEv(null,{k:'fell',i:t.id,fx:+ffx.toFixed(2),fz:+ffz.toFixed(2)});toast('🌳 Timber! Collect the logs and sticks')}
+      else toast('🪓 Chop! '+t.hp+' more '+(t.hp===1?'swing':'swings'));
+    }else{
+      t.stk=t.stk||0;
+      if(t.stk<3&&Math.random()<0.5){t.stk++;const a=Math.random()*6.28;dropMine(20,t.x+Math.cos(a)*1.3,t.z+Math.sin(a)*1.3);toast('A stick fell from the tree')}
+      else toast('Thud. An 🪓 axe would chop it down (craft one in the bag)');
+    }
+    return true;
+  }
+  extraTick.push((T,dt)=>{
+    const now=nowS();
+    for(let i=fallers.length-1;i>=0;i--){
+      const f=fallers[i];f.age+=dt;
+      let a=Math.min(Math.PI/2,1.1*f.age*f.age);
+      if(f.age>1.45){const bt=f.age-1.45;a=Math.PI/2-Math.max(0,0.1*Math.sin(bt*9)*Math.exp(-bt*4))}
+      if(!f.hit&&a>=Math.PI/2-0.02){f.hit=true;if(f.t.mine)spawnDrops(f.t,f.fx,f.fz);if(ac&&soundOn){const d=Math.hypot(eyeV.x-f.t.x,eyeV.z-f.t.z);if(d<70)nz(ac.currentTime,0.35,0.2*Math.max(0,1-d/70),130,0)}}
+      _fa.set(f.fz,0,-f.fx);_fq.setFromAxisAngle(_fa,a);
+      _fp.makeTranslation(f.t.x,f.t.h-0.4,f.t.z);_fi.copy(_fp).invert();_fr.makeRotationFromQuaternion(_fq);
+      _fm.copy(_fp).multiply(_fr).multiply(_fi);
+      f.cm.setMatrixAt(0,_fi.copy(_fm).multiply(f.t.cM));f.tm.setMatrixAt(0,_fm.multiply(f.t.tM));
+      f.cm.instanceMatrix.needsUpdate=true;f.tm.instanceMatrix.needsUpdate=true;
+      if(f.age>5.5){scene.remove(f.cm);scene.remove(f.tm);fallers.splice(i,1)}
+    }
+    for(let i=regrow.length-1;i>=0;i--){const t=regrow[i];if(now>t.regrow){regrowTree(t);regrow.splice(i,1)}}
+  });
+  /* tents */
+  const TENTCOL=['#c8553a','#4f7a9a','#6c8a4a','#d9b04a','#8a5a9a'];
+  function makeTent(u,x,z,yaw,ci){
+    if(HOUSES.some(h=>h.uid===u&&!h.dead))return;
+    const y=groundAt(x,z),g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=yaw;
+    const hw=1.5,hh=2.3,d=3.0,L=Math.hypot(hw,hh),th=Math.atan2(hw,hh);
+    const cloth=new THREE.MeshStandardMaterial({color:lin(TENTCOL[ci%5]),roughness:0.9,side:THREE.DoubleSide}),wood=new THREE.MeshStandardMaterial({color:lin('#6b4a2e'),roughness:0.9});
+    const add=(geo,mat,px,py,pz,rx,ry,rz)=>{const m=new THREE.Mesh(geo,mat);m.position.set(px,py,pz);m.rotation.set(rx||0,ry||0,rz||0);m.castShadow=true;m.receiveShadow=true;g.add(m);return m};
+    add(new THREE.BoxGeometry(0.04,L,d),cloth,hw/2,hh/2,0,0,0,th);add(new THREE.BoxGeometry(0.04,L,d),cloth,-hw/2,hh/2,0,0,0,-th);
+    const sh=new THREE.Shape();sh.moveTo(-hw,0);sh.lineTo(hw,0);sh.lineTo(0,hh);add(new THREE.ShapeGeometry(sh),cloth,0,0,-d/2);
+    add(new THREE.BoxGeometry(0.07,0.07,d+0.5),wood,0,hh,0);
+    for(const sd of[-1,1])add(new THREE.BoxGeometry(0.07,L,0.07),wood,sd*hw/2,hh/2,d/2,0,0,sd*th);
+    add(new THREE.BoxGeometry(2*hw-0.1,0.05,d),new THREE.MeshStandardMaterial({color:lin('#3a4a35'),roughness:1}),0,0.025,0);
+    add(new THREE.BoxGeometry(0.8,0.14,1.9),new THREE.MeshStandardMaterial({color:lin('#8a3b3b'),roughness:1}),-0.45,0.12,-0.3);
+    add(new THREE.BoxGeometry(0.6,0.1,0.34),new THREE.MeshStandardMaterial({color:lin('#e8dcc0'),roughness:1}),-0.45,0.24,-1.0);
+    add(new THREE.SphereGeometry(0.09,8,6),new THREE.MeshBasicMaterial({color:0xffd9a0}),0.75,0.4,-0.9);
+    scene.add(g);
+    const H={x,z,y,yaw,c:Math.cos(yaw),s:Math.sin(yaw),w:2*hw,d,fy:y,h:hh,br:5,bx:[[-1.35,0,0.12,d/2,1],[1.35,0,0.12,d/2,1],[0,-d/2+0.08,hw,0.1,1]],door:{a:0,t:0,auto:0},i:HOUSES.length,tent:true,uid:u,g,dead:false};
+    HOUSES.push(H);return H;
+  }
+  function placeTent(){
+    if((bag.n[33]||0)<1)return;
+    if(heldAnimal>=0){toast('Put the animal down first');return}
+    const [x,z]=placeAhead(3.6);
+    if(heightAt(x,z)<1.0||riverD(x,z)<RIVER_W*1.3||slopeAt(x,z)>0.35||Math.abs(groundAt(x,z)-gy())>1.6){toast("You can't pitch a tent here");return}
+    for(const H of HOUSES)if(!H.dead&&Math.hypot(H.x-x,H.z-z)<(H.tent?4:H.br+1.5)){toast('Too close to another building');return}
+    if(shotSolid(x,z,1)){toast('Something is in the way');return}
+    const u=myId+'.t'+(dynN++),ci=Math.floor(Math.random()*5);
+    addBag(33,-1);if((bag.n[33]||0)<1&&heldSel===33)heldSel=0;
+    makeTent(u,x,z,yaw,ci);sendEv(null,{k:'tent',u,x:+x.toFixed(2),z:+z.toFixed(2),yaw:+yaw.toFixed(3),c:ci});
+    closeBag();toast('⛺ Tent pitched! Walk in. Grab it to pack it up');
+  }
+  function packTent(H){
+    if(H.dead)return;H.dead=true;scene.remove(H.g);addBag(33,1);sendEv(null,{k:'tentx',u:H.uid});toast('You packed up the tent');
+  }
+  Object.assign(window.__items,{dynMap,craft,chopTry,fellTree,placeTent,packTent,makeTent,trees,fallers,HOUSES,setYaw(v){yaw=v}});
   /* every frame */
   extraTick.push((T,dt,cam)=>{
     if(mode!=='walk')return;
@@ -2057,7 +2170,9 @@ async function build(){
       if(n>0){
         mk(heldSel===id&&heldAnimal<0?'Put away':'Hold',()=>{if(heldAnimal>=0){toast('Put the animal down first');return}heldSel=heldSel===id?0:id;bagUI()},'pri');
         if(id===20)mk('🔥 Build campfire',()=>{closeBag();makeCampfire()});
-        if(id===20||id===30||id===29){const ok=(bag.n[20]||0)>=2&&(bag.n[30]||0)>=1;mk('🎣 Craft rod (2 Stick + 1 Vine)',craftRod,ok?'':'dim')}
+        for(const r of RECIPES)if(r.id===id||r.need[id]){const ok=Object.entries(r.need).every(([k,c])=>(bag.n[k]||0)>=c);mk('🛠 Craft '+ITEMS[r.id].e+' '+ITEMS[r.id].n+' ('+Object.entries(r.need).map(([k,c])=>c+' '+ITEMS[k].n).join(' + ')+')',()=>craft(r.id),ok?'':'dim')}
+        if(id===31)mk('🪓 Chop',()=>{heldSel=31;setGesture(7);closeBag()});
+        if(id===33)mk('⛺ Place tent',placeTent);
         if(COOK[id])mk('🍳 Cook',()=>{heldSel=id;setGesture(18);closeBag()});
         if(id===29)mk('🎣 Cast',()=>{heldSel=29;setGesture(17);closeBag()});
         if(it.eat)mk('Eat',()=>{if(heldAnimal>=0)return;heldSel=id;setGesture(9);closeBag()});
@@ -2069,12 +2184,17 @@ async function build(){
       A.appendChild(row);
     }else{const p=document.createElement('div');p.className='bdesc';p.innerHTML='<span>Pick things up around the island to fill your collection.</span>';A.appendChild(p)}
   }
-  function craftRod(){
+  const RECIPES=[{id:29,need:{20:2,30:1}},{id:31,need:{20:1,21:1,30:1}},{id:33,need:{32:4,30:2}}];
+  function craft(id){
+    const r=RECIPES.find(q=>q.id===id);if(!r)return;
     if(heldAnimal>=0){toast('Put the animal down first');return}
-    if((bag.n[20]||0)<2||(bag.n[30]||0)<1){toast('You need 2 🪵 Sticks and 1 🌿 Vine (you have '+(bag.n[20]||0)+' and '+(bag.n[30]||0)+')');return}
-    addBag(20,-2);addBag(30,-1);addBag(29,1);heldSel=29;if(ac&&soundOn){nz(ac.currentTime,0.12,0.1,1800,0);nz(ac.currentTime+0.14,0.1,0.08,1500,0)}
-    toast('🎣 You crafted a Fishing Rod!');bagSel=29;bagUI();
+    const lack=Object.entries(r.need).filter(([k,c])=>(bag.n[k]||0)<c);
+    if(lack.length){toast('Need '+Object.entries(r.need).map(([k,c])=>c+' '+ITEMS[k].e+' '+ITEMS[k].n+' (you have '+(bag.n[k]||0)+')').join(' + '));return}
+    for(const [k,c] of Object.entries(r.need)){addBag(+k,-c);if((bag.n[k]||0)<1&&heldSel===+k)heldSel=0}
+    addBag(id,1);heldSel=id;if(ac&&soundOn){nz(ac.currentTime,0.12,0.1,1800,0);nz(ac.currentTime+0.14,0.1,0.08,1500,0)}
+    toast('🛠 You crafted '+ITEMS[id].e+' '+ITEMS[id].n+'!');bagSel=id;bagUI();
   }
+  const craftRod=()=>craft(29);
   function openBag(){bagUI();$('#bag').classList.remove('off')}
   function closeBag(){$('#bag').classList.add('off')}
   function setGesture(i){if(typeof doGesture==='function')doGesture(i)}
@@ -2275,7 +2395,7 @@ async function build(){
   }
   let gcx=1e9,gcz=1e9;
   function onHouse(x,z){
-    for(const H of HOUSES){const dx=x-H.x,dz=z-H.z;if(dx*dx+dz*dz>H.br*H.br)continue;
+    for(const H of HOUSES){if(H.dead)continue;const dx=x-H.x,dz=z-H.z;if(dx*dx+dz*dz>H.br*H.br)continue;
       const lx=dx*H.c-dz*H.s,lz=dx*H.s+dz*H.c;if(Math.abs(lx)<H.w/2+0.7&&Math.abs(lz)<H.d/2+0.7)return true}
     return false;
   }
