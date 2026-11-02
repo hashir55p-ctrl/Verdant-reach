@@ -2656,7 +2656,7 @@ async function build(){
   /* gestures */
   const GEST=[null,{e:'👋',n:'Wave',d:3.4},{e:'💃',n:'Dance',d:8},{e:'👏',n:'Clap',d:3.2},{e:'🙌',n:'Cheer',d:3.2},{e:'🪑',n:'Sit',d:0},{e:'🙇',n:'Bow',d:2.2},
     {e:'⚔️',n:'Swing',d:1.0},{e:'🎯',n:'Throw',d:0.9},{e:'😋',n:'Eat',d:2.4},{e:'🎁',n:'Give',d:1.3},{e:'👉',n:'Point',d:2.5},{e:'🫡',n:'Salute',d:2},{e:'🤷',n:'Shrug',d:2},{e:'💪',n:'Flex',d:3},{e:'🤗',n:'Pet',d:2.5},
-    {e:'💧',n:'Drink',d:2.2},{e:'🎣',n:'Cast',d:1.6},{e:'🍳',n:'Cook',d:2.6},{e:'🙆',n:'Stretch',d:3},{e:'😂',n:'Laugh',d:2.8},{e:'👍',n:'Thumbs up',d:2.4},{e:'😴',n:'Sleep',d:0},{e:'🧎',n:'Crouch',d:0},{e:'🌀',n:'Spin',d:1.4},{e:'✊',n:'Fist pump',d:2}];
+    {e:'💧',n:'Drink',d:2.2},{e:'🎣',n:'Cast',d:1.6},{e:'🍳',n:'Cook',d:2.6},{e:'🙆',n:'Stretch',d:3},{e:'😂',n:'Laugh',d:2.8},{e:'👍',n:'Thumbs up',d:2.4},{e:'😴',n:'Sleep',d:0},{e:'🤔',n:'Think',d:4},{e:'🌀',n:'Spin',d:1.4},{e:'✊',n:'Fist pump',d:2}];
   function poseAvatar(av,gid,gt,swing,amt){
     const {legs,arms,up,fore}=av.userData;av.rotation.order='YXZ';av.rotation.x=0;
     legs[0].rotation.set(0,0,0);legs[1].rotation.set(0,0,0);arms[0].rotation.set(0,0,0);arms[1].rotation.set(0,0,0);up.rotation.set(0,0,0);
@@ -2681,34 +2681,34 @@ async function build(){
     else if(gid===5){oy=-0.43;legs[0].rotation.x=legs[1].rotation.x=1.45;arms[0].rotation.set(0.5,0,-0.08);arms[1].rotation.set(0.5,0,0.08);up.rotation.x=0.05}
     else if(gid===6){up.rotation.x=0.95*S;arms[0].rotation.x=arms[1].rotation.x=0.25*S}
     else if(gid===7){ /* swing: wind up then chop down */
-      const w=p<0.4?p/0.4:1-(p-0.4)/0.6*1.0;const a=p<0.4?-2.6*(p/0.4):-2.6+ (p-0.4)/0.6*3.4;
+      const a=p<0.4?2.6*(p/0.4):2.6-(p-0.4)/0.6*2.0;
       arms[1].rotation.x=a;arms[1].rotation.z=0.1;if(fore)fore[1].rotation.x=0.3;up.rotation.x=p<0.4?-0.1:0.35*Math.sin((p-0.4)/0.6*Math.PI);up.rotation.y=-0.25*S;
     }
     else if(gid===8){ /* throw */
-      const a=p<0.35?-2.4*(p/0.35):-2.4+(p-0.35)/0.65*3.2;
-      arms[1].rotation.x=Math.min(a,0.8);if(fore)fore[1].rotation.x=p<0.35?1.2:0.15;up.rotation.x=p<0.35?-0.12:0.22;legs[0].rotation.x=0.25*S;
+      const a=p<0.35?-1.6*(p/0.35):-1.6+(p-0.35)/0.65*3.2;
+      arms[1].rotation.x=a;if(fore)fore[1].rotation.x=p<0.35?1.2:0.15;up.rotation.x=p<0.35?-0.12:0.22;legs[0].rotation.x=0.25*S;
     }
     else if(gid===9){ /* eat: hand to mouth, chew */
-      arms[1].rotation.x=-1.75*Math.min(1,gt/0.45);if(fore)fore[1].rotation.x=1.9;up.rotation.x=0.05+Math.abs(Math.sin(gt*9))*0.04;
+      arms[1].rotation.x=0.7*Math.min(1,gt/0.45);if(fore)fore[1].rotation.x=2.1*Math.min(1,gt/0.45);up.rotation.x=0.05+Math.abs(Math.sin(gt*9))*0.04;
     }
     else if(gid===10){ /* give: both arms forward */
-      const e=Math.min(1,gt/0.35);arms[1].rotation.x=-1.25*e;arms[0].rotation.x=-0.5*e;if(fore){fore[1].rotation.x=0.3;fore[0].rotation.x=0.9*e}up.rotation.x=0.18*S;
+      const e=Math.min(1,gt/0.35);arms[1].rotation.x=1.25*e;arms[0].rotation.x=1.0*e;if(fore){fore[1].rotation.x=0.3;fore[0].rotation.x=0.9*e}up.rotation.x=0.18*S;
     }
-    else if(gid===11){arms[1].rotation.x=-1.5;arms[1].rotation.z=0.12;if(fore)fore[1].rotation.x=0.05;up.rotation.y=0.2}
-    else if(gid===12){arms[1].rotation.x=-2.7;arms[1].rotation.z=0.5;if(fore)fore[1].rotation.x=2.0}
-    else if(gid===13){const s=Math.sin(gt*5)*0.1;for(let i=0;i<2;i++){arms[i].rotation.x=-0.4;arms[i].rotation.z=sg(i)*(0.55+s);if(fore)fore[i].rotation.x=1.2}up.rotation.z=s*0.5}
+    else if(gid===11){arms[1].rotation.x=1.5;arms[1].rotation.z=0.12;if(fore)fore[1].rotation.x=0.05;up.rotation.y=0.2}
+    else if(gid===12){arms[1].rotation.x=0.5;arms[1].rotation.z=0.9;if(fore)fore[1].rotation.x=2.3}
+    else if(gid===13){const s=Math.sin(gt*5)*0.1;for(let i=0;i<2;i++){arms[i].rotation.x=0.4;arms[i].rotation.z=sg(i)*(0.55+s);if(fore)fore[i].rotation.x=1.2}up.rotation.z=s*0.5}
     else if(gid===14){const k=Math.min(1,gt/0.4),b=Math.sin(gt*6)*0.05;for(let i=0;i<2;i++){arms[i].rotation.z=sg(i)*1.55*k;if(fore)fore[i].rotation.x=2.2*k}oy=Math.abs(b)}
-    else if(gid===15){up.rotation.x=0.4*Math.min(1,gt/0.4);arms[1].rotation.x=-0.5-Math.sin(gt*6)*0.15;arms[0].rotation.x=-0.3;legs[0].rotation.x=0.2;legs[1].rotation.x=-0.2;oy=-0.06}
-    else if(gid===16){up.rotation.x=0.75*Math.min(1,gt/0.5);oy=-0.25*Math.min(1,gt/0.5);legs[0].rotation.x=legs[1].rotation.x=0.9*Math.min(1,gt/0.5);arms[0].rotation.x=-0.8;arms[1].rotation.x=-0.8+Math.sin(gt*5)*0.15;if(fore){fore[0].rotation.x=1.2;fore[1].rotation.x=1.2}}
-    else if(gid===17){const a=p<0.4?-2.2*(p/0.4):-2.2+(p-0.4)/0.6*1.7;arms[1].rotation.x=a;arms[0].rotation.x=-0.3;if(fore)fore[1].rotation.x=p<0.4?0.8:0.2;up.rotation.x=p<0.4?-0.1:0.15}
-    else if(gid===18){arms[1].rotation.x=-0.95+Math.sin(gt*8)*0.22;arms[0].rotation.x=-0.5;if(fore){fore[1].rotation.x=0.7;fore[0].rotation.x=0.9}up.rotation.x=0.3}
+    else if(gid===15){up.rotation.x=0.4*Math.min(1,gt/0.4);arms[1].rotation.x=0.6+Math.sin(gt*6)*0.15;arms[0].rotation.x=0.3;legs[0].rotation.x=0.2;legs[1].rotation.x=-0.2;oy=-0.06}
+    else if(gid===16){const k=Math.min(1,gt/0.5);up.rotation.x=0.5*k;legs[0].rotation.x=-0.25*k;legs[1].rotation.x=0.25*k;oy=-0.06*k;arms[0].rotation.x=arms[1].rotation.x=(1.0+Math.sin(gt*5)*0.08)*k;if(fore){fore[0].rotation.x=fore[1].rotation.x=1.7*k}}
+    else if(gid===17){const a=p<0.4?2.2*(p/0.4):2.2-(p-0.4)/0.6*1.7;arms[1].rotation.x=a;arms[0].rotation.x=0.3;if(fore)fore[1].rotation.x=p<0.4?0.8:0.2;up.rotation.x=p<0.4?-0.1:0.15}
+    else if(gid===18){arms[1].rotation.x=0.95+Math.sin(gt*8)*0.22;arms[0].rotation.x=0.5;if(fore){fore[1].rotation.x=0.7;fore[0].rotation.x=0.9}up.rotation.x=0.3}
     else if(gid===19){const k=Math.min(1,gt/0.6);for(let i=0;i<2;i++)arms[i].rotation.z=sg(i)*2.8*k;up.rotation.x=-0.18*k;legs[0].rotation.x=0.1;legs[1].rotation.x=-0.1}
-    else if(gid===20){for(let i=0;i<2;i++){arms[i].rotation.x=-0.6;arms[i].rotation.z=sg(i)*0.15}up.rotation.x=-0.22+Math.sin(gt*18)*0.05;oy=Math.abs(Math.sin(gt*14))*0.03}
-    else if(gid===21){arms[1].rotation.x=-1.25;if(fore)fore[1].rotation.x=1.5;oy=Math.abs(Math.sin(gt*6))*0.02}
+    else if(gid===20){for(let i=0;i<2;i++){arms[i].rotation.x=0.6;arms[i].rotation.z=sg(i)*0.15}up.rotation.x=-0.22+Math.sin(gt*18)*0.05;oy=Math.abs(Math.sin(gt*14))*0.03}
+    else if(gid===21){arms[1].rotation.x=1.25;if(fore)fore[1].rotation.x=1.5;oy=Math.abs(Math.sin(gt*6))*0.02}
     else if(gid===22){av.rotation.x=Math.PI/2*Math.min(1,gt/0.7);oy=0.14*Math.min(1,gt/0.7);arms[0].rotation.set(0,0,-0.15);arms[1].rotation.set(0.1,0,0.15)}
-    else if(gid===23){oy=-0.5;legs[0].rotation.x=legs[1].rotation.x=1.55;legs[0].rotation.z=0.0;up.rotation.x=0.22;arms[0].rotation.x=arms[1].rotation.x=-0.35}
+    else if(gid===23){arms[1].rotation.x=0.5;arms[1].rotation.z=0.05;arms[0].rotation.x=0.8;if(fore){fore[1].rotation.x=2.3;fore[0].rotation.x=1.3}up.rotation.x=0.08;up.rotation.y=Math.sin(gt*0.8)*0.15}
     else if(gid===24){yo=Math.min(1,gt/1.4)*Math.PI*4;oy=Math.abs(Math.sin(Math.min(1,gt/1.4)*Math.PI))*0.15;for(let i=0;i<2;i++)arms[i].rotation.z=sg(i)*1.3}
-    else if(gid===25){const b=Math.abs(Math.sin(gt*6));arms[1].rotation.x=-2.8;arms[1].rotation.z=0.1;if(fore)fore[1].rotation.x=0.9+b*0.5;oy=b*0.05;arms[0].rotation.x=0.3}
+    else if(gid===25){const b=Math.abs(Math.sin(gt*6));arms[1].rotation.x=2.8;arms[1].rotation.z=0.1;if(fore)fore[1].rotation.x=0.9+b*0.5;oy=b*0.05;arms[0].rotation.x=0.3}
     return {oy,yo};
   }
   const bubTex={};
@@ -3329,7 +3329,7 @@ async function build(){
   }
   applyTime();
   frame();
-  window.__verdant={critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
+  window.__verdant={poseAvatar,GEST,critter,birds,animals,makeAvatar,cleanProf,renderer,scene,camera,enter,remotes,net,openNet,closeNet,me:()=>me,voice,myId,THREE,tp:(x,z)=>{P.x=x;P.z=z},look:(y,pt)=>{yaw=y;pitch=pt},dbg:()=>({bridges:BRIDGES,sites:SITES.map(q=>[q.n,Math.round(q.x),Math.round(q.z),+q.h.toFixed(1)]),boats:boats.length,animals:animals.length,birds:birds.length,verts:worldMesh.geometry.attributes.position.count}),fly:(x,y,z,yw,pt)=>{P.x=x;P.z=z;flying=true;py=y;fvy=0;yaw=yw;pitch=pt},hrs:v=>{if(v!=null)hours=v;return hours}};
   $('#veil').classList.add('gone');
 }
 
