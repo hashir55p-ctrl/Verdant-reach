@@ -54,3 +54,6 @@ Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek,
 
 ## 360° view
 - Eye button `#orbBtn` (key O) toggles `orb` orbit camera (`setOrbit`, `applyOrbit`): drag rotates around your character, wheel/pinch zooms, auto-spins after 2.5 s idle, any movement exits. Camera stays out of terrain and house walls.
+
+## Crafting
+- Fishing rod: 2 Sticks (20) + 1 Vine (30, new item scattered in forests, swamp and river banks with its own RNG 4711) via `craftRod()`; button appears in the bag on Stick/Vine/Rod. Rods can still be found lying near towns.
