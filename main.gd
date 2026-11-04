@@ -30,6 +30,7 @@ var run_toggle := false
 var look := {}
 var pal := {}
 var menu_open := false
+var gest_open := false
 const CHAR_KEYS := ["boy", "girl", "male", "female"]
 const CHAR_NAMES := ["Boy", "Girl", "Explorer M", "Explorer F"]
 const LOOK_ROWS := [["tint", "Tint (Boy/Girl)"], ["skin", "Skin"], ["hair", "Hair"], ["top", "Top"], ["pants", "Pants"], ["boots", "Boots"], ["eyes", "Eyes"], ["scarf", "Scarf"], ["pack", "Backpack"]]
@@ -1313,12 +1314,64 @@ func run_center() -> Vector2:
     return Vector2(s.x - 250.0, s.y - 85.0)
 
 
+func gest_center() -> Vector2:
+    var s := get_viewport().get_visible_rect().size
+    return Vector2(s.x - 110.0, s.y - 235.0)
+
+
+func gest_items() -> Array:
+    var out: Array = []
+    var s := get_viewport().get_visible_rect().size
+    var u := ui_scale()
+    var cols := 5
+    var w := 150.0 * u
+    var h := 50.0 * u
+    var gap := 8.0 * u
+    var n: int = Player.GEST.size() - 1
+    var rows := int(ceil(float(n) / float(cols)))
+    var pw := cols * (w + gap) + gap
+    var ph := rows * (h + gap) + gap + 56.0 * u
+    var x0 := (s.x - pw) * 0.5
+    var y0 := maxf(10.0, (s.y - ph) * 0.5) + 56.0 * u
+    for i in n:
+        var r := i / cols
+        var c := i % cols
+        out.append({"rect": Rect2(x0 + gap + c * (w + gap), y0 + gap + r * (h + gap), w, h), "id": i + 1, "text": Player.GEST[i + 1][0]})
+    out.append({"rect": Rect2(x0 + pw - 130.0 * u - gap, y0 - 52.0 * u, 130.0 * u, 44.0 * u), "id": -1, "text": "CLOSE"})
+    out.append({"rect": Rect2(x0, y0 - 56.0 * u, pw, ph), "id": -2, "text": ""})
+    return out
+
+
+func _gest_tap(p: Vector2) -> void:
+    for it in gest_items():
+        if int(it["id"]) == -2:
+            continue
+        if (it["rect"] as Rect2).has_point(p):
+            if int(it["id"]) > 0:
+                player.call("play_gesture", int(it["id"]))
+            gest_open = false
+            return
+    gest_open = false
+
+
 func _input(event: InputEvent) -> void:
     var size := get_viewport().get_visible_rect().size
     if online_open:
         return
     if event is InputEventScreenTouch and _over_ui((event as InputEventScreenTouch).position):
         return
+    if gest_open:
+        if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+            _gest_tap((event as InputEventScreenTouch).position)
+        return
+    if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+        var kc := (event as InputEventKey).keycode
+        if kc == KEY_G:
+            gest_open = true
+            return
+        if kc >= KEY_1 and kc <= KEY_9:
+            player.call("play_gesture", int(kc - KEY_1) + 1)
+            return
     if menu_open:
         if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
             _menu_tap((event as InputEventScreenTouch).position)
@@ -1345,6 +1398,11 @@ func _input(event: InputEvent) -> void:
         if te.pressed:
             if te.position.distance_to(jump_center()) < 70.0:
                 player.call("jump")
+            elif te.position.distance_to(gest_center()) < 52.0:
+                gest_open = true
+                stick_id = -1
+                stick_vec = Vector2.ZERO
+                look_id = -1
             elif te.position.distance_to(run_center()) < 55.0:
                 run_toggle = not run_toggle
             elif te.position.x < size.x * 0.45 and stick_id == -1:
@@ -1977,7 +2035,7 @@ func _net_send_state() -> void:
         yaw = m.rotation.y
     var sw := 1 if bool(player.get("swimming")) else 0
     var gr := 1 if player.is_on_floor() else 0
-    ws.send_text(JSON.stringify({"t": "s", "s": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01), snappedf(yaw, 0.01), sw, gr, 0]}))
+    ws.send_text(JSON.stringify({"t": "s", "s": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01), snappedf(yaw, 0.01), sw, gr, int(player.get("gest"))]}))
 
 
 func _net_process(delta: float) -> void:
@@ -2155,6 +2213,7 @@ func _remote_state(id: String, s: Array) -> void:
     pl.net_yaw = float(s[3])
     pl.net_swim = float(s[4]) > 0.5
     pl.net_grounded = float(s[5]) > 0.5
+    pl.net_gest = int(float(s[6])) if s.size() > 6 else 0
     if r["fresh"]:
         r["fresh"] = false
         pl.global_position = pl.net_pos
@@ -2451,6 +2510,27 @@ class Player extends CharacterBody3D:
     var prev_vy := 0.0
     var was_on_floor := true
     var turn_rate := 0.0
+    var gest := 0            # current gesture id (0 = none)
+    var gest_t := 0.0
+    var gest_dur := 0.0
+    var gb := 0.0            # gesture blend 0..1
+    var net_gest := 0
+    const GEST := [
+        ["", 0.0], ["Wave", 3.4], ["Dance", 8.0], ["Clap", 3.2], ["Cheer", 3.2], ["Sit", 0.0], ["Bow", 2.2],
+        ["Swing", 1.0], ["Throw", 0.9], ["Eat", 2.4], ["Give", 1.3], ["Point", 2.5], ["Salute", 2.0], ["Shrug", 2.0],
+        ["Flex", 3.0], ["Pet", 2.5], ["Drink", 2.2], ["Cast", 1.6], ["Cook", 2.6], ["Stretch", 3.0], ["Laugh", 2.8],
+        ["Thumbs up", 2.4], ["Sleep", 0.0], ["Think", 4.0], ["Spin", 1.4], ["Fist pump", 2.0]]
+
+
+    func play_gesture(id: int) -> void:
+        if id <= 0 or id >= GEST.size():
+            gest = 0
+            return
+        if swimming:
+            return
+        gest = id
+        gest_t = 0.0
+        gest_dur = float(GEST[id][1])
 
 
     func _ready() -> void:
@@ -2927,6 +3007,11 @@ class Player extends CharacterBody3D:
         hv = hv / maxf(delta, 0.0001)
         swimming = net_swim
         swim = lerpf(swim, 1.0 if swimming else 0.0, 1.0 - exp(-5.0 * delta))
+        if net_gest != gest and not (net_gest > 0 and gest_dur > 0.0 and gest == net_gest):
+            if net_gest > 0:
+                play_gesture(net_gest)
+            else:
+                gest = 0
         if model != null:
             model.rotation.y = lerp_angle(model.rotation.y, net_yaw, 1.0 - exp(-10.0 * delta))
             turn_rate = 0.0
@@ -2987,6 +3072,13 @@ class Player extends CharacterBody3D:
             velocity.y -= GRAV * delta
 
         prev_vel = Vector3(hv.x, 0.0, hv.z)
+        if gest > 0 and (inp.length() > 0.25 or not is_on_floor() or swimming):
+            gest = 0
+        elif gest > 0 and gest_dur > 0.0 and gest_t > gest_dur:
+            gest = 0
+        if gest > 0:
+            velocity.x = 0.0
+            velocity.z = 0.0
         move_and_slide()
 
         if is_on_floor() and not was_on_floor and prev_vy < -3.0:
@@ -3090,6 +3182,223 @@ class Player extends CharacterBody3D:
                 last_sw = sw
                 if swim > 0.6 and speed > 0.4 and step_cb.is_valid() and sw % 2 == 0:
                     step_cb.call(2.5)
+        _gesture(delta)
+
+
+    func _gesture(delta: float) -> void:
+        gb = move_toward(gb, 1.0 if (gest > 0 and not swimming) else 0.0, delta * 4.0)
+        if gest > 0:
+            gest_t += delta
+        if gb < 0.01:
+            model.position.y = 0.0
+            return
+        var tt := gest_t
+        var ux := [uarm[0].rotation.x, uarm[1].rotation.x]
+        var uz := [uarm[0].rotation.z, uarm[1].rotation.z]
+        var fx := [farm[0].rotation.x, farm[1].rotation.x]
+        var th := [thigh[0].rotation.x, thigh[1].rotation.x]
+        var kn := [knee[0].rotation.x, knee[1].rotation.x]
+        var sx := spine.rotation.x
+        var sz := spine.rotation.z
+        var sy := spine.rotation.y
+        var nx := neck.rotation.x
+        var nz := neck.rotation.z
+        var py := pelvis.position.y
+        var pry := pelvis.rotation.y
+        var lie := 0.0
+        var legs := false
+        var g := gest if gest > 0 else 0
+        var eas := clampf(tt * 3.0, 0.0, 1.0)
+        match g:
+            1:  # wave
+                ux[1] = -0.2
+                uz[1] = 2.4
+                fx[1] = 0.5 + 0.55 * sin(tt * 11.0)
+                nz = 0.08
+            2:  # dance
+                legs = true
+                var b := sin(tt * 6.0)
+                py = base_y - 0.05 - absf(b) * 0.07
+                pry = sin(tt * 3.0) * 0.45
+                sy = -pry * 0.6
+                for i in 2:
+                    var ph := tt * 6.0 + (PI if i == 1 else 0.0)
+                    var side := -1.0 if i == 0 else 1.0
+                    ux[i] = -1.7 + sin(ph) * 0.9
+                    uz[i] = side * (0.9 + 0.3 * sin(ph))
+                    fx[i] = 1.0
+                    th[i] = sin(ph) * 0.35
+                    kn[i] = -0.25 - maxf(0.0, sin(ph)) * 0.5
+            3:  # clap
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    ux[i] = -1.25
+                    uz[i] = side * (0.55 - 0.35 * (0.5 + 0.5 * sin(tt * 14.0)))
+                    fx[i] = 1.2
+            4:  # cheer
+                legs = true
+                py = base_y - 0.04 - absf(sin(tt * 8.0)) * 0.05
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    ux[i] = -0.3
+                    uz[i] = side * (2.6 + 0.2 * sin(tt * 9.0 + float(i)))
+                    fx[i] = 0.3
+                    th[i] = 0.0
+                    kn[i] = -0.2 - absf(sin(tt * 8.0)) * 0.3
+            5:  # sit
+                legs = true
+                py = base_y - 0.46
+                sx = -0.1
+                for i in 2:
+                    th[i] = 1.45
+                    kn[i] = -1.4
+                    ux[i] = -0.55
+                    fx[i] = 0.7
+            6:  # bow
+                var d := sin(clampf(tt / 2.2, 0.0, 1.0) * PI)
+                sx = -1.15 * d
+                nx = 0.35 * d
+            7:  # swing
+                var p := clampf(tt / 1.0, 0.0, 1.0)
+                ux[1] = lerpf(-2.7, 0.2, p * p)
+                uz[1] = 0.3
+                fx[1] = 0.5
+                sy = lerpf(0.5, -0.6, p)
+            8:  # throw
+                var p := clampf(tt / 0.9, 0.0, 1.0)
+                ux[1] = lerpf(0.9, -2.5, clampf(p * 1.8, 0.0, 1.0)) if p < 0.55 else lerpf(-2.5, 0.4, (p - 0.55) / 0.45)
+                fx[1] = 0.4
+                sy = lerpf(0.6, -0.5, clampf(p * 1.5, 0.0, 1.0))
+            9:  # eat
+                ux[1] = -1.05
+                uz[1] = 0.15
+                fx[1] = 2.0 + 0.2 * sin(tt * 9.0)
+                nx = 0.15 + 0.08 * sin(tt * 9.0)
+            10:  # give
+                for i in 2:
+                    ux[i] = -1.45
+                    fx[i] = 0.25
+                sx = -0.15
+            11:  # point
+                ux[1] = -1.55
+                uz[1] = 0.1
+                fx[1] = 0.05
+            12:  # salute
+                ux[1] = -1.2
+                uz[1] = 0.8
+                fx[1] = 2.4
+            13:  # shrug
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    uz[i] = side * 0.7
+                    ux[i] = -0.3
+                    fx[i] = 1.5
+                nz = 0.18 * sin(tt * 4.0)
+                nx = -0.1
+            14:  # flex
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    uz[i] = side * 1.75
+                    ux[i] = 0.0
+                    fx[i] = 2.3 + 0.15 * sin(tt * 6.0)
+                sx = 0.12
+            15:  # pet
+                legs = true
+                py = base_y - 0.28
+                sx = -0.5
+                for i in 2:
+                    th[i] = 1.0
+                    kn[i] = -1.6
+                ux[1] = -1.0 + 0.2 * sin(tt * 5.0)
+                fx[1] = 0.5
+                ux[0] = -0.6
+                fx[0] = 0.6
+            16:  # drink
+                ux[1] = -1.0
+                uz[1] = 0.15
+                fx[1] = 2.2
+                nx = -0.45
+            17:  # cast
+                var p := clampf(tt / 0.5, 0.0, 1.0)
+                ux[1] = lerpf(-0.2, -2.1, p) if tt < 0.5 else -1.25
+                ux[0] = -0.9
+                fx[0] = 0.8
+                fx[1] = 0.5
+                sx = 0.08 - 0.15 * p
+            18:  # cook / stir
+                for i in 2:
+                    ux[i] = -0.95
+                    fx[i] = 1.0
+                uz[1] = 0.15 + 0.2 * sin(tt * 6.0)
+                sx = -0.3
+                nx = 0.3
+            19:  # stretch
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    ux[i] = -3.0
+                    uz[i] = side * 0.35
+                    fx[i] = 0.1
+                sx = 0.22 * eas
+                nx = -0.25
+            20:  # laugh
+                for i in 2:
+                    ux[i] = -0.6
+                    fx[i] = 1.5
+                sx = -0.1 + 0.18 * sin(tt * 14.0)
+                py = base_y - 0.02 - absf(sin(tt * 14.0)) * 0.02
+                nx = -0.25
+            21:  # thumbs up
+                ux[1] = -1.15
+                uz[1] = 0.3
+                fx[1] = 1.2
+                nz = 0.08
+            22:  # sleep
+                lie = 1.0
+                for i in 2:
+                    ux[i] = 0.0
+                    fx[i] = 0.3
+            23:  # think
+                ux[1] = -1.0
+                fx[1] = 2.35
+                ux[0] = -0.85
+                fx[0] = 1.6
+                nz = 0.18
+                nx = 0.1
+            24:  # spin
+                for i in 2:
+                    var side := -1.0 if i == 0 else 1.0
+                    uz[i] = side * 1.45
+                    ux[i] = 0.0
+                    fx[i] = 0.1
+                if not is_remote:
+                    model.rotation.y += delta * TAU / 1.4
+            25:  # fist pump
+                var pump := absf(sin(tt * 7.0))
+                ux[1] = -2.2 - 0.3 * pump
+                uz[1] = 0.25
+                fx[1] = 1.8
+                py = base_y - 0.03 * pump
+        var k := gb
+        for i in 2:
+            uarm[i].rotation.x = lerpf(uarm[i].rotation.x, ux[i], k)
+            uarm[i].rotation.z = lerpf(uarm[i].rotation.z, uz[i], k)
+            farm[i].rotation.x = lerpf(farm[i].rotation.x, fx[i], k)
+            if legs:
+                thigh[i].rotation.x = lerpf(thigh[i].rotation.x, th[i], k)
+                knee[i].rotation.x = lerpf(knee[i].rotation.x, kn[i], k)
+                foot[i].rotation.x = lerpf(foot[i].rotation.x, (-float(kn[i]) - float(th[i])) * 0.5, k)
+        spine.rotation.x = lerpf(spine.rotation.x, sx, k)
+        spine.rotation.y = lerpf(spine.rotation.y, sy, k)
+        spine.rotation.z = lerpf(spine.rotation.z, sz, k)
+        neck.rotation.x = lerpf(neck.rotation.x, nx, k)
+        neck.rotation.z = lerpf(neck.rotation.z, nz, k)
+        pelvis.position.y = lerpf(pelvis.position.y, py, k)
+        pelvis.rotation.y = lerpf(pelvis.rotation.y, pry, k)
+        if lie > 0.0:
+            model.rotation.x = lerpf(model.rotation.x, 1.45, k)
+            model.position.y = lerpf(model.position.y, 0.12, k)
+        else:
+            model.position.y = lerpf(model.position.y, 0.0, clampf(delta * 6.0, 0.0, 1.0))
 
 
 
@@ -3121,6 +3430,11 @@ class Hud extends Control:
         draw_arc(rc, 44.0, 0.0, TAU, 32, Color(1, 1, 1, 0.45), 2.0)
         draw_string(font, rc + Vector2(-21, 7), "RUN", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.9))
 
+        var gc: Vector2 = main.gest_center()
+        draw_circle(gc, 44.0, Color(0.5, 0.8, 1.0, 0.40) if main.gest_open else Color(1, 1, 1, 0.14))
+        draw_arc(gc, 44.0, 0.0, TAU, 32, Color(1, 1, 1, 0.45), 2.0)
+        draw_string(font, gc + Vector2(-35, 6), "GESTURE", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
+
         var u: float = main.ui_scale()
         var sr: Rect2 = main.style_rect()
         draw_rect(sr, Color(0, 0, 0, 0.45), true)
@@ -3133,6 +3447,8 @@ class Hud extends Control:
                 _draw_minimap(font, u)
         if main.menu_open:
             _draw_menu(font, s, u)
+        if main.gest_open:
+            _draw_gest(font, s, u)
 
         var t: float = main.time_of_day
         var hrs := int(t * 24.0)
@@ -3204,6 +3520,24 @@ class Hud extends Control:
         draw_line(Vector2(r.position.x + 14, by), Vector2(r.position.x + 14 + bar, by), Color(1, 1, 1), 3.0)
         draw_string(font, Vector2(r.position.x + 18 + bar, by + 6.0), "100 m", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1))
         draw_string(font, Vector2(r.position.x + 14, r.position.y + 28.0), "Tap anywhere to close", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1))
+
+
+    func _draw_gest(font: Font, s: Vector2, u: float) -> void:
+        var items: Array = main.gest_items()
+        for it in items:
+            var r: Rect2 = it["rect"]
+            var id: int = it["id"]
+            if id == -2:
+                draw_rect(r, Color(0.05, 0.06, 0.08, 0.88), true)
+                draw_rect(r, Color(1, 1, 1, 0.5), false, 2.0)
+                draw_string(font, r.position + Vector2(20.0 * u, 38.0 * u), "GESTURES  (tap one)", HORIZONTAL_ALIGNMENT_LEFT, -1, int(24.0 * u), Color(1, 1, 1, 0.95))
+            elif id == -1:
+                draw_rect(r, Color(0.45, 0.25, 0.25, 0.95), true)
+                draw_string(font, r.position + Vector2(24.0 * u, 29.0 * u), it["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(20.0 * u), Color(1, 1, 1, 1))
+            else:
+                draw_rect(r, Color(1, 1, 1, 0.14), true)
+                draw_rect(r, Color(1, 1, 1, 0.35), false, 1.0)
+                draw_string(font, r.position + Vector2(14.0 * u, 32.0 * u), it["text"], HORIZONTAL_ALIGNMENT_LEFT, int(r.size.x - 20.0 * u), int(20.0 * u), Color(1, 1, 1, 0.95))
 
 
     func _draw_menu(font: Font, s: Vector2, u: float) -> void:
