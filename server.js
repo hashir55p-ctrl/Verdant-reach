@@ -151,6 +151,7 @@ function wsUpgrade(req, sock) {
     } else if (op === 1 && d.length < 4000) {
       let m; try { m = JSON.parse(d.toString()); } catch (e) { return; }
       if (m.t === 's' && Array.isArray(m.s)) { me.s = m.s.slice(0, 10).map(Number); others(c => wsText(c, { t: 's', id, s: me.s })); }
+      else if (m.t === 'ev' && m.d && JSON.stringify(m.d).length < 400) { others(c => wsText(c, { t: 'ev', id, d: m.d })); }
       else if (m.t === 'p' && m.p && JSON.stringify(m.p).length < 1500) { const first = !me.p; me.p = m.p; others(c => wsText(c, { t: first ? 'join' : 'p', id, p: me.p })); }
     }
   };

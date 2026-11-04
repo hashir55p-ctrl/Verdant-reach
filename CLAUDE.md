@@ -30,7 +30,7 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 
 ## Godot version relay (`/ws`)
 - `server.js` also speaks WebSocket (hand-written RFC 6455, no dependency) at `/ws?room=CODE&id=ID` for the Godot game in `verdant-godot/` (kept outside this repo). Separate `gRooms` from the SSE web rooms, 8 per room.
-- Text frames: client `{t:'p',p:{n,g,look}}` profile, `{t:'s',s:[x,y,z,yaw,swim,grounded,run]}` state; server sends `hello` (you, tod, peers), `join`, `p`, `s`, `leave`, `time`, `full`. Binary frames = voice (16 kHz mono mu-law); the server relays them to the others as `[idLen][id][bytes]`.
+- Text frames: client `{t:'p',p:{n,g,look}}` profile, `{t:'s',s:[x,y,z,yaw,swim,grounded,run]}` state; client `{t:'ev',d:{...}}` one-off events (items taken/dropped, animals picked up) relayed as `{t:'ev',id,d}`; server sends `hello` (you, tod, peers), `join`, `p`, `s`, `leave`, `time`, `full`. Binary frames = voice (16 kHz mono mu-law); the server relays them to the others as `[idLen][id][bytes]`.
 
 ## Ideas not built yet
 Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek, weather, saved rooms, TURN server for voice on strict networks.
