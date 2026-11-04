@@ -111,7 +111,80 @@ function auth(req, res, p) {
   out(res, 404, {});
 }
 
-http.createServer((req, res) => {
+
+// ---- WebSocket relay for the Godot version: /ws?room=CODE&id=ID  (JSON text = state/profile, binary = voice)
+const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', gRooms = new Map(), DAY = 600;
+function wsFrame(op, data) {
+  const n = data.length; let h;
+  if (n < 126) h = Buffer.from([0x80 | op, n]);
+  else if (n < 65536) { h = Buffer.alloc(4); h[0] = 0x80 | op; h[1] = 126; h.writeUInt16BE(n, 2); }
+  else { h = Buffer.alloc(10); h[0] = 0x80 | op; h[1] = 127; h.writeUInt32BE(n, 6); }
+  return Buffer.concat([h, data]);
+}
+const wsText = (c, o) => { if (!c.sock.destroyed) c.sock.write(wsFrame(1, Buffer.from(JSON.stringify(o)))); };
+const wsBin = (c, b) => { if (!c.sock.destroyed && c.sock.writableLength < 262144) c.sock.write(wsFrame(2, b)); };
+function wsUpgrade(req, sock) {
+  const u = new URL(req.url, 'http://x');
+  const key = req.headers['sec-websocket-key'];
+  if (u.pathname !== '/ws' || !key) return sock.destroy();
+  const code = clean(u.searchParams.get('room'), 16), id = clean(u.searchParams.get('id'), 12);
+  if (!code || !id) return sock.destroy();
+  sock.on('error', () => {});
+  sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' +
+    crypto.createHash('sha1').update(key + GUID).digest('base64') + '\r\n\r\n');
+  sock.setNoDelay(true);
+  let room = gRooms.get(code);
+  if (!room) gRooms.set(code, room = { peers: new Map(), t0: Date.now(), tod0: 0.31 });
+  const me = { sock, id, p: null, s: null };
+  if (room.peers.size >= MAX && !room.peers.has(id)) { wsText(me, { t: 'full' }); sock.end(); return; }
+  const old = room.peers.get(id); if (old) old.sock.destroy();
+  const tod = () => (room.tod0 + (Date.now() - room.t0) / 1000 / DAY) % 1;
+  const others = fn => { for (const [k, c] of room.peers) if (k !== id) fn(c); };
+  room.peers.set(id, me);
+  wsText(me, { t: 'hello', you: id, tod: tod(), peers: [...room.peers.values()].filter(c => c !== me).map(c => ({ id: c.id, p: c.p, s: c.s })) });
+  const idb = Buffer.from(id);
+  const handle = (op, d) => {
+    if (op === 2) {
+      if (d.length < 2 || d.length > 4000) return;
+      const out = Buffer.concat([Buffer.from([idb.length]), idb, d]);
+      others(c => wsBin(c, out));
+    } else if (op === 1 && d.length < 4000) {
+      let m; try { m = JSON.parse(d.toString()); } catch (e) { return; }
+      if (m.t === 's' && Array.isArray(m.s)) { me.s = m.s.slice(0, 10).map(Number); others(c => wsText(c, { t: 's', id, s: me.s })); }
+      else if (m.t === 'p' && m.p && JSON.stringify(m.p).length < 1500) { const first = !me.p; me.p = m.p; others(c => wsText(c, { t: first ? 'join' : 'p', id, p: me.p })); }
+    }
+  };
+  let buf = Buffer.alloc(0), frag = null, fragOp = 0;
+  sock.on('data', chunk => {
+    buf = Buffer.concat([buf, chunk]);
+    if (buf.length > 1 << 20) return sock.destroy();
+    for (;;) {
+      if (buf.length < 2) return;
+      const b0 = buf[0], b1 = buf[1], op = b0 & 15, fin = !!(b0 & 128); let len = b1 & 127, off = 2;
+      if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; }
+      else if (len === 127) { if (buf.length < 10) return; len = buf.readUInt32BE(6); off = 10; }
+      const masked = !!(b1 & 128); if (masked) off += 4;
+      if (buf.length < off + len) return;
+      let d = Buffer.from(buf.subarray(off, off + len));
+      if (masked) { const mk = buf.subarray(off - 4, off); for (let i = 0; i < d.length; i++) d[i] ^= mk[i & 3]; }
+      buf = buf.subarray(off + len);
+      if (op === 8) { sock.end(wsFrame(8, Buffer.alloc(0))); return; }
+      if (op === 9) { sock.write(wsFrame(10, d)); continue; }
+      if (op === 10) continue;
+      if (op === 0) { frag = frag ? Buffer.concat([frag, d]) : d; if (fin) { handle(fragOp, frag); frag = null; } continue; }
+      if (!fin) { frag = d; fragOp = op; continue; }
+      handle(op, d);
+    }
+  });
+  const ping = setInterval(() => { if (!sock.destroyed) sock.write(wsFrame(9, Buffer.alloc(0))); }, 20000);
+  const tm = setInterval(() => wsText(me, { t: 'time', v: tod() }), 15000);
+  sock.on('close', () => {
+    clearInterval(ping); clearInterval(tm);
+    if (room.peers.get(id) === me) { room.peers.delete(id); others(c => wsText(c, { t: 'leave', id })); if (!room.peers.size) gRooms.delete(code); }
+  });
+}
+
+const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   if (p.startsWith('/auth/')) return auth(req, res, p);
   if (p === '/events') return events(req, res, u.searchParams);
@@ -124,4 +197,6 @@ http.createServer((req, res) => {
     res.writeHead(200, {'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': p === '/sw.js' ? 'no-cache' : 'public, max-age=300'});
     res.end(d);
   });
-}).listen(PORT, () => console.log('Verdant Reach online on :' + PORT));
+});
+srv.on('upgrade', wsUpgrade);
+srv.listen(PORT, () => console.log('Verdant Reach online on :' + PORT));

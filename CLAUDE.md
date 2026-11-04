@@ -28,6 +28,10 @@ Live: https://verdant-reach.onrender.com (Render, Node web service, free plan; m
 - Camp/fish module (after the items module): `buildFire`/`makeCampfire` (3 sticks, 15 min, synced by `ev` fire), `COOK` map, `castNow`/`reelIn` fishing (rod id 29, fish ids 50-57, cooked 60-62), animals log `bag.an`, swimming fish instanced mesh. Sounds: `critter`, `stepSnd`, sea waves in the audio section.
 - Optional Google sign-in: set env `GOOGLE_CLIENT_ID` on the host (Web client ID, authorised origin = site URL). `/auth/config`, `/auth/google`, `/auth/me`, `/auth/save` in `server.js`; accounts stored in `accounts.json` (set `DATA_DIR` to a persistent disk; free Render disk is ephemeral).
 
+## Godot version relay (`/ws`)
+- `server.js` also speaks WebSocket (hand-written RFC 6455, no dependency) at `/ws?room=CODE&id=ID` for the Godot game in `verdant-godot/` (kept outside this repo). Separate `gRooms` from the SSE web rooms, 8 per room.
+- Text frames: client `{t:'p',p:{n,g,look}}` profile, `{t:'s',s:[x,y,z,yaw,swim,grounded,run]}` state; server sends `hello` (you, tod, peers), `join`, `p`, `s`, `leave`, `time`, `full`. Binary frames = voice (16 kHz mono mu-law); the server relays them to the others as `[idLen][id][bytes]`.
+
 ## Ideas not built yet
 Map ping / "meet here", follow-a-friend, text chat, collectibles, hide and seek, weather, saved rooms, TURN server for voice on strict networks.
 
