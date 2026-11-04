@@ -56,6 +56,7 @@ func _ready() -> void:
     _build_assets()
     _build_meadow()
     _build_fauna()
+    _build_items()
     _make_palettes()
     _load_look()
     _build_player()
@@ -926,7 +927,7 @@ func _build_fauna() -> void:
             if p.x != INF:
                 var mi := _add_fauna(skunk, p, 0.0, rng.randf_range(0.9, 1.2))
                 fauna.append({"node": mi, "kind": "walk", "c": Vector2(p.x, p.z), "r": rng.randf_range(1.5, 3.0),
-                    "spd": rng.randf_range(0.15, 0.25) * (1.0 if i % 2 == 0 else -1.0), "ph": rng.randf() * TAU, "y": 0.0, "off": 0.0})
+                    "spd": rng.randf_range(0.15, 0.25) * (1.0 if i % 2 == 0 else -1.0), "ph": rng.randf() * TAU, "y": 0.0, "off": 0.0, "small": true, "held": false})
     var egret := _anim_mesh(_load_mesh("res://assets/animal_egret.glb"), "egret")
     if egret != null:
         for i in 5:
@@ -951,6 +952,8 @@ func _update_fauna() -> void:
     var t := Time.get_ticks_msec() * 0.001
     for f in fauna:
         var mi: MeshInstance3D = f["node"]
+        if f.get("held", false):
+            continue
         var ph: float = f["ph"] + t * float(f["spd"])
         var c: Vector2 = f["c"]
         var r: float = f["r"]
@@ -1360,6 +1363,10 @@ func _input(event: InputEvent) -> void:
         return
     if event is InputEventScreenTouch and _over_ui((event as InputEventScreenTouch).position):
         return
+    if bag_open:
+        if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+            _bag_tap((event as InputEventScreenTouch).position)
+        return
     if gest_open:
         if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
             _gest_tap((event as InputEventScreenTouch).position)
@@ -1368,6 +1375,12 @@ func _input(event: InputEvent) -> void:
         var kc := (event as InputEventKey).keycode
         if kc == KEY_G:
             gest_open = true
+            return
+        if kc == KEY_B:
+            bag_open = true
+            return
+        if kc == KEY_F:
+            do_pick()
             return
         if kc >= KEY_1 and kc <= KEY_9:
             player.call("play_gesture", int(kc - KEY_1) + 1)
@@ -1398,6 +1411,13 @@ func _input(event: InputEvent) -> void:
         if te.pressed:
             if te.position.distance_to(jump_center()) < 70.0:
                 player.call("jump")
+            elif te.position.distance_to(pick_center()) < 56.0:
+                do_pick()
+            elif te.position.distance_to(bag_center()) < 50.0:
+                bag_open = true
+                stick_id = -1
+                stick_vec = Vector2.ZERO
+                look_id = -1
             elif te.position.distance_to(gest_center()) < 52.0:
                 gest_open = true
                 stick_id = -1
@@ -1432,6 +1452,7 @@ func _process(delta: float) -> void:
     _update_fauna()
     _update_audio(delta)
     _net_process(delta)
+    _update_items(delta)
     player.set("move_input", stick_vec)
     player.set("want_run", run_toggle or stick_vec.length() > 0.88)
     if hud != null:
@@ -2106,6 +2127,8 @@ func _net_text(txt: String) -> void:
     elif t == "join" or t == "p":
         _remote_add(str(m.get("id", "")), m.get("p", null))
         _ui_refresh()
+    elif t == "ev":
+        _item_event(m.get("d", null))
     elif t == "s":
         if m.get("s", null) is Array:
             _remote_state(str(m.get("id", "")), m["s"])
@@ -2441,6 +2464,398 @@ func _menu_tap(p: Vector2) -> void:
                 look[it["group"]] = it["idx"]
                 apply_look()
             return
+
+
+
+# ---------------------------------------------------------------- items, fruit, bag, picking up animals
+const ITEMS := {
+    1: {"n": "Apple", "eat": true}, 2: {"n": "Orange", "eat": true}, 3: {"n": "Plum", "eat": true},
+    4: {"n": "Banana", "eat": true}, 5: {"n": "Mushroom", "eat": true}, 6: {"n": "Stick"},
+    7: {"n": "Stone"}, 8: {"n": "Vine"}, 20: {"n": "Skunk", "animal": true}}
+var ground := {}          # key -> {id, node, hide}
+var bag := {}             # item id (as string) -> count
+var bag_open := false
+var bag_sel := 0
+var pick_cand := ""       # "g:<key>" or "a:<index>"
+var pick_text := ""
+var drop_n := 0
+var held_an: Array = []   # fauna indices currently in the bag
+var item_noise: NoiseTexture2D = null
+
+
+func pick_center() -> Vector2:
+    var s := get_viewport().get_visible_rect().size
+    return Vector2(s.x - 370.0, s.y - 95.0)
+
+
+func bag_center() -> Vector2:
+    var s := get_viewport().get_visible_rect().size
+    return Vector2(s.x - 235.0, s.y - 205.0)
+
+
+func _item_mat(c: Color, rough: float, coat: bool) -> StandardMaterial3D:
+    var m := StandardMaterial3D.new()
+    m.albedo_color = c
+    m.roughness = rough
+    if item_noise != null:
+        m.albedo_texture = item_noise
+        m.uv1_scale = Vector3(3, 3, 3)
+        m.uv1_triplanar = true
+    if coat:
+        m.clearcoat_enabled = true
+        m.clearcoat = 0.5
+        m.clearcoat_roughness = 0.25
+    return m
+
+
+func _item_mi(parent: Node3D, mesh: Mesh, mat: Material, pos: Vector3, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    mi.material_override = mat
+    mi.position = pos
+    mi.rotation = rot
+    mi.visibility_range_end = 55.0
+    parent.add_child(mi)
+    return mi
+
+
+func _make_item_node(id: int, v: float) -> Node3D:
+    var n := Node3D.new()
+    var vr := 0.85 + 0.3 * v
+    match id:
+        1, 2, 3:
+            var sp := SphereMesh.new()
+            var r := 0.075 * vr
+            if id == 2:
+                r = 0.085 * vr
+            if id == 3:
+                r = 0.055 * vr
+            sp.radius = r
+            sp.height = r * (1.8 if id == 1 else 2.0)
+            sp.radial_segments = 20
+            sp.rings = 10
+            var col := Color(0.78, 0.1, 0.08)
+            if id == 2:
+                col = Color(0.95, 0.5, 0.08)
+            if id == 3:
+                col = Color(0.35, 0.12, 0.45)
+            if id == 1 and v > 0.6:
+                col = Color(0.55, 0.75, 0.15)
+            _item_mi(n, sp, _item_mat(col, 0.35, true), Vector3(0, r, 0))
+            var st := CylinderMesh.new()
+            st.top_radius = 0.004
+            st.bottom_radius = 0.006
+            st.height = 0.05
+            _item_mi(n, st, _item_mat(Color(0.25, 0.17, 0.08), 0.9, false), Vector3(0, r * 1.9, 0))
+        4:
+            var cap := CapsuleMesh.new()
+            cap.radius = 0.028
+            cap.height = 0.2
+            var m := _item_mat(Color(0.95, 0.82, 0.18), 0.5, false)
+            _item_mi(n, cap, m, Vector3(0, 0.03, 0), Vector3(0, 0, PI * 0.5 + 0.35))
+            _item_mi(n, cap, m, Vector3(0.07, 0.035, 0), Vector3(0, 0, PI * 0.5 - 0.35))
+        5:
+            var capm := SphereMesh.new()
+            capm.radius = 0.07
+            capm.height = 0.08
+            var stem := CylinderMesh.new()
+            stem.top_radius = 0.018
+            stem.bottom_radius = 0.026
+            stem.height = 0.08
+            _item_mi(n, stem, _item_mat(Color(0.9, 0.88, 0.8), 0.8, false), Vector3(0, 0.04, 0))
+            _item_mi(n, capm, _item_mat(Color(0.62, 0.3, 0.18), 0.6, false), Vector3(0, 0.09, 0))
+        6:
+            var cy := CylinderMesh.new()
+            cy.top_radius = 0.016
+            cy.bottom_radius = 0.022
+            cy.height = 0.7 * vr
+            cy.radial_segments = 8
+            _item_mi(n, cy, _bark_mat(), Vector3(0, 0.02, 0), Vector3(0, v * TAU, PI * 0.5))
+        7:
+            var rm := _lumpy_rock()
+            var mi := _item_mi(n, rm, _rock_mat(), Vector3(0, 0.02, 0))
+            mi.scale = Vector3.ONE * 0.1 * vr
+        8:
+            var tm := TorusMesh.new()
+            tm.inner_radius = 0.09 * vr
+            tm.outer_radius = 0.112 * vr
+            _item_mi(n, tm, _item_mat(Color(0.2, 0.42, 0.14), 0.7, false), Vector3(0, 0.02, 0), Vector3(0.2, v * TAU, 0.0))
+    return n
+
+
+func _item_key_pos(key: String) -> Vector3:
+    if ground.has(key):
+        return (ground[key]["node"] as Node3D).global_position
+    return Vector3(INF, 0, 0)
+
+
+func _build_items() -> void:
+    item_noise = NoiseTexture2D.new()
+    var nz := FastNoiseLite.new()
+    nz.frequency = 0.07
+    item_noise.noise = nz
+    item_noise.width = 128
+    item_noise.height = 128
+    item_noise.seamless = true
+    item_noise.color_ramp = Gradient.new()
+    item_noise.color_ramp.colors = PackedColorArray([Color(0.7, 0.7, 0.7), Color(1, 1, 1)])
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 7777
+    var total := 300
+    if OS.has_feature("web"):
+        total = 180
+    for i in total:
+        var p := _spot(rng, 1.0, 16.0, 0.5)
+        var r := rng.randf()
+        var id := 1
+        if r < 0.16:
+            id = 1
+        elif r < 0.27:
+            id = 2
+        elif r < 0.36:
+            id = 3
+        elif r < 0.44:
+            id = 4
+        elif r < 0.52:
+            id = 5
+        elif r < 0.72:
+            id = 6
+        elif r < 0.88:
+            id = 7
+        else:
+            id = 8
+        var v := rng.randf()
+        var yaw := rng.randf() * TAU
+        if p.x == INF:
+            continue
+        var node := _make_item_node(id, v)
+        node.position = Vector3(p.x, height_at(p.x, p.z), p.z)
+        node.rotation.y = yaw
+        add_child(node)
+        ground["s%d" % i] = {"id": id, "node": node, "hide": 0.0, "static": true}
+    _bag_load()
+
+
+func _bag_load() -> void:
+    var f := FileAccess.open("user://bag.json", FileAccess.READ)
+    if f == null:
+        return
+    var d = JSON.parse_string(f.get_as_text())
+    if d is Dictionary:
+        for k in d.keys():
+            if ITEMS.has(int(k)) and not ITEMS[int(k)].has("animal"):
+                bag[str(int(k))] = int(d[k])
+
+
+func _bag_save() -> void:
+    var out := {}
+    for k in bag.keys():
+        if not ITEMS[int(k)].has("animal"):
+            out[k] = bag[k]
+    var f := FileAccess.open("user://bag.json", FileAccess.WRITE)
+    if f != null:
+        f.store_string(JSON.stringify(out))
+
+
+func _bag_add(id: int, n: int) -> void:
+    var k := str(id)
+    bag[k] = int(bag.get(k, 0)) + n
+    if int(bag[k]) <= 0:
+        bag.erase(k)
+    _bag_save()
+
+
+func _ev_send(d: Dictionary) -> void:
+    if ws != null and net_state == "online":
+        ws.send_text(JSON.stringify({"t": "ev", "d": d}))
+
+
+func _update_items(_delta: float) -> void:
+    var now := Time.get_ticks_msec() * 0.001
+    var pp: Vector3 = player.global_position
+    var best := ""
+    var bd := 2.4 * 2.4
+    var btxt := ""
+    for key in ground.keys():
+        var g: Dictionary = ground[key]
+        var node: Node3D = g["node"]
+        if float(g["hide"]) > 0.0:
+            if now > float(g["hide"]):
+                g["hide"] = 0.0
+                node.visible = true
+            else:
+                continue
+        var dd := node.global_position - pp
+        dd.y = 0.0
+        var d2 := dd.length_squared()
+        if d2 < bd:
+            bd = d2
+            best = "g:" + str(key)
+            btxt = "Pick up " + str(ITEMS[int(g["id"])]["n"])
+    for i in fauna.size():
+        var f: Dictionary = fauna[i]
+        if not f.get("small", false) or f.get("held", false):
+            continue
+        var an: Node3D = f["node"]
+        var dd2 := an.global_position - pp
+        dd2.y = 0.0
+        var d3 := dd2.length_squared()
+        if d3 < bd * 1.4 and d3 < 3.0 * 3.0:
+            bd = d3 / 1.4
+            best = "a:%d" % i
+            btxt = "Pick up Skunk"
+    pick_cand = best
+    pick_text = btxt
+
+
+func do_pick() -> void:
+    if pick_cand == "":
+        return
+    var kind := pick_cand.substr(0, 1)
+    var key := pick_cand.substr(2)
+    pick_cand = ""
+    player.set("squat", 0.3)
+    if kind == "g" and ground.has(key):
+        var g: Dictionary = ground[key]
+        _bag_add(int(g["id"]), 1)
+        _item_take(key)
+        _ev_send({"k": "take", "key": key})
+    elif kind == "a":
+        var i := int(key)
+        if i >= 0 and i < fauna.size():
+            fauna[i]["held"] = true
+            (fauna[i]["node"] as Node3D).visible = false
+            held_an.append(i)
+            _bag_add(20, 1)
+            _ev_send({"k": "an", "i": i})
+            player.call("play_gesture", 15)
+
+
+func _item_take(key: String) -> void:
+    if not ground.has(key):
+        return
+    var g: Dictionary = ground[key]
+    if g.get("static", false):
+        g["hide"] = Time.get_ticks_msec() * 0.001 + 90.0
+        (g["node"] as Node3D).visible = false
+    else:
+        (g["node"] as Node3D).queue_free()
+        ground.erase(key)
+
+
+func _item_drop(key: String, id: int, x: float, z: float) -> void:
+    var node := _make_item_node(id, 0.5)
+    node.position = Vector3(x, height_at(x, z), z)
+    add_child(node)
+    ground[key] = {"id": id, "node": node, "hide": 0.0, "static": false}
+
+
+func _bag_action(act: String) -> void:
+    if bag_sel == 0 or not bag.has(str(bag_sel)):
+        return
+    var info: Dictionary = ITEMS[bag_sel]
+    if act == "eat" and info.has("eat"):
+        _bag_add(bag_sel, -1)
+        bag_open = false
+        player.call("play_gesture", 9)
+    elif act == "drop":
+        var m: Node3D = player.get("model")
+        var yaw := 0.0
+        if m != null:
+            yaw = m.rotation.y
+        var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
+        var pp: Vector3 = player.global_position + fwd * 1.0
+        if info.has("animal"):
+            if held_an.size() > 0:
+                var i: int = held_an.pop_back()
+                fauna[i]["held"] = false
+                fauna[i]["c"] = Vector2(pp.x, pp.z)
+                (fauna[i]["node"] as Node3D).visible = true
+                _bag_add(20, -1)
+                _ev_send({"k": "anr", "i": i, "cx": snappedf(pp.x, 0.01), "cz": snappedf(pp.z, 0.01)})
+        else:
+            drop_n += 1
+            var key := "d%s_%d" % [net_id, drop_n]
+            _bag_add(bag_sel, -1)
+            _item_drop(key, bag_sel, pp.x, pp.z)
+            _ev_send({"k": "drop", "key": key, "id": bag_sel, "x": snappedf(pp.x, 0.01), "z": snappedf(pp.z, 0.01)})
+        bag_open = false
+    if not bag.has(str(bag_sel)):
+        bag_sel = 0
+
+
+func _item_event(d) -> void:
+    if not (d is Dictionary):
+        return
+    var k := str(d.get("k", ""))
+    if k == "take":
+        _item_take(str(d.get("key", "")))
+    elif k == "drop":
+        var id := int(d.get("id", 0))
+        if ITEMS.has(id):
+            _item_drop(str(d.get("key", "")), id, float(d.get("x", 0)), float(d.get("z", 0)))
+    elif k == "an":
+        var i := int(d.get("i", -1))
+        if i >= 0 and i < fauna.size():
+            fauna[i]["held"] = true
+            (fauna[i]["node"] as Node3D).visible = false
+    elif k == "anr":
+        var j := int(d.get("i", -1))
+        if j >= 0 and j < fauna.size():
+            fauna[j]["held"] = false
+            fauna[j]["c"] = Vector2(float(d.get("cx", 0)), float(d.get("cz", 0)))
+            (fauna[j]["node"] as Node3D).visible = true
+
+
+func bag_layout() -> Array:
+    var out: Array = []
+    var s := get_viewport().get_visible_rect().size
+    var u := ui_scale()
+    var ids: Array = []
+    for k in bag.keys():
+        ids.append(int(k))
+    ids.sort()
+    var cols := 3
+    var w := 230.0 * u
+    var h := 50.0 * u
+    var gap := 8.0 * u
+    var rows := maxi(1, int(ceil(float(ids.size()) / float(cols))))
+    var pw := cols * (w + gap) + gap
+    var ph := 64.0 * u + rows * (h + gap) + 70.0 * u
+    var x0 := (s.x - pw) * 0.5
+    var y0 := maxf(8.0, (s.y - ph) * 0.5)
+    out.append({"rect": Rect2(x0, y0, pw, ph), "act": "panel", "text": ""})
+    for i in ids.size():
+        out.append({"rect": Rect2(x0 + gap + (i % cols) * (w + gap), y0 + 64.0 * u + (i / cols) * (h + gap), w, h), "act": "item", "id": ids[i],
+            "text": "%s  x%d" % [ITEMS[ids[i]]["n"], int(bag[str(ids[i])])]})
+    var by := y0 + ph - 58.0 * u
+    var bw := 130.0 * u
+    var bx := x0 + gap
+    if bag_sel != 0 and ITEMS.has(bag_sel):
+        if ITEMS[bag_sel].has("eat"):
+            out.append({"rect": Rect2(bx, by, bw, 46.0 * u), "act": "eat", "text": "EAT"})
+            bx += bw + gap
+        out.append({"rect": Rect2(bx, by, bw * 1.2, 46.0 * u), "act": "drop", "text": "RELEASE" if ITEMS[bag_sel].has("animal") else "DROP"})
+    out.append({"rect": Rect2(x0 + pw - bw - gap, by, bw, 46.0 * u), "act": "close", "text": "CLOSE"})
+    return out
+
+
+func _bag_tap(p: Vector2) -> void:
+    for it in bag_layout():
+        if it["act"] == "panel":
+            continue
+        if (it["rect"] as Rect2).has_point(p):
+            var a: String = it["act"]
+            if a == "item":
+                bag_sel = int(it["id"])
+            elif a == "close":
+                bag_open = false
+            else:
+                _bag_action(a)
+            return
+    var panel: Rect2 = bag_layout()[0]["rect"]
+    if not panel.has_point(p):
+        bag_open = false
 
 
 # ---------------------------------------------------------------- inner classes
@@ -3435,6 +3850,18 @@ class Hud extends Control:
         draw_arc(gc, 44.0, 0.0, TAU, 32, Color(1, 1, 1, 0.45), 2.0)
         draw_string(font, gc + Vector2(-35, 6), "GESTURE", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.9))
 
+        var pc: Vector2 = main.pick_center()
+        var can: bool = main.pick_cand != ""
+        draw_circle(pc, 50.0, Color(0.55, 1.0, 0.55, 0.45) if can else Color(1, 1, 1, 0.10))
+        draw_arc(pc, 50.0, 0.0, TAU, 32, Color(1, 1, 1, 0.5 if can else 0.25), 2.0)
+        draw_string(font, pc + Vector2(-21, 7), "PICK", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color(1, 1, 1, 0.95 if can else 0.4))
+        if can:
+            draw_string(font, pc + Vector2(-70, -64), main.pick_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 0.8, 1))
+        var bc: Vector2 = main.bag_center()
+        draw_circle(bc, 44.0, Color(1.0, 0.85, 0.5, 0.35) if main.bag_open else Color(1, 1, 1, 0.14))
+        draw_arc(bc, 44.0, 0.0, TAU, 32, Color(1, 1, 1, 0.45), 2.0)
+        draw_string(font, bc + Vector2(-17, 7), "BAG", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color(1, 1, 1, 0.9))
+
         var u: float = main.ui_scale()
         var sr: Rect2 = main.style_rect()
         draw_rect(sr, Color(0, 0, 0, 0.45), true)
@@ -3449,6 +3876,8 @@ class Hud extends Control:
             _draw_menu(font, s, u)
         if main.gest_open:
             _draw_gest(font, s, u)
+        if main.bag_open:
+            _draw_bag(font, s, u)
 
         var t: float = main.time_of_day
         var hrs := int(t * 24.0)
@@ -3520,6 +3949,25 @@ class Hud extends Control:
         draw_line(Vector2(r.position.x + 14, by), Vector2(r.position.x + 14 + bar, by), Color(1, 1, 1), 3.0)
         draw_string(font, Vector2(r.position.x + 18 + bar, by + 6.0), "100 m", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1))
         draw_string(font, Vector2(r.position.x + 14, r.position.y + 28.0), "Tap anywhere to close", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1))
+
+
+    func _draw_bag(font: Font, _s: Vector2, u: float) -> void:
+        for it in main.bag_layout():
+            var r: Rect2 = it["rect"]
+            var a: String = it["act"]
+            if a == "panel":
+                draw_rect(r, Color(0.05, 0.06, 0.08, 0.9), true)
+                draw_rect(r, Color(1, 1, 1, 0.5), false, 2.0)
+                draw_string(font, r.position + Vector2(20.0 * u, 40.0 * u), "BAG", HORIZONTAL_ALIGNMENT_LEFT, -1, int(26.0 * u), Color(1, 1, 1, 0.95))
+                if main.bag.is_empty():
+                    draw_string(font, r.position + Vector2(20.0 * u, 100.0 * u), "Empty. Walk up to fruit, sticks, stones or small animals and tap PICK.", HORIZONTAL_ALIGNMENT_LEFT, int(r.size.x - 30.0 * u), int(18.0 * u), Color(1, 1, 1, 0.7))
+            elif a == "item":
+                var sel: bool = int(it["id"]) == main.bag_sel
+                draw_rect(r, Color(0.25, 0.45, 0.30, 0.9) if sel else Color(1, 1, 1, 0.12), true)
+                draw_string(font, r.position + Vector2(14.0 * u, 32.0 * u), it["text"], HORIZONTAL_ALIGNMENT_LEFT, int(r.size.x - 20.0 * u), int(20.0 * u), Color(1, 1, 1, 0.95))
+            else:
+                draw_rect(r, Color(0.45, 0.25, 0.25, 0.95) if a == "close" else Color(0.25, 0.45, 0.30, 0.95), true)
+                draw_string(font, r.position + Vector2(16.0 * u, 31.0 * u), it["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(20.0 * u), Color(1, 1, 1, 1))
 
 
     func _draw_gest(font: Font, s: Vector2, u: float) -> void:
