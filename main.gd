@@ -2471,7 +2471,20 @@ func _menu_tap(p: Vector2) -> void:
 const ITEMS := {
     1: {"n": "Apple", "eat": true}, 2: {"n": "Orange", "eat": true}, 3: {"n": "Plum", "eat": true},
     4: {"n": "Banana", "eat": true}, 5: {"n": "Mushroom", "eat": true}, 6: {"n": "Stick"},
-    7: {"n": "Stone"}, 8: {"n": "Vine"}, 20: {"n": "Skunk", "animal": true}}
+    7: {"n": "Stone"}, 8: {"n": "Vine"}, 9: {"n": "Fishing rod"}, 20: {"n": "Skunk", "animal": true},
+    50: {"n": "Carp"}, 51: {"n": "Trout"}, 60: {"n": "Cooked carp", "eat": true}, 61: {"n": "Cooked trout", "eat": true},
+    62: {"n": "Roast mushroom", "eat": true}, 63: {"n": "Baked apple", "eat": true}}
+const COOK := {50: 60, 51: 61, 5: 62, 1: 63}
+var fires: Array = []     # {key, node, light, until}
+var fish_state := 0       # 0 none, 1 waiting, 2 bite
+var fish_at := 0.0
+var fish_until := 0.0
+var fish_pos := Vector3.ZERO
+var bobber: MeshInstance3D = null
+var toast_text := ""
+var toast_until := 0.0
+var fire_n := 0
+var flame_tex: GradientTexture2D = null
 var ground := {}          # key -> {id, node, hide}
 var bag := {}             # item id (as string) -> count
 var bag_open := false
@@ -2523,7 +2536,7 @@ func _make_item_node(id: int, v: float) -> Node3D:
     var n := Node3D.new()
     var vr := 0.85 + 0.3 * v
     match id:
-        1, 2, 3:
+        1, 2, 3, 63:
             var sp := SphereMesh.new()
             var r := 0.075 * vr
             if id == 2:
@@ -2541,6 +2554,8 @@ func _make_item_node(id: int, v: float) -> Node3D:
                 col = Color(0.35, 0.12, 0.45)
             if id == 1 and v > 0.6:
                 col = Color(0.55, 0.75, 0.15)
+            if id == 63:
+                col = Color(0.45, 0.22, 0.1)
             _item_mi(n, sp, _item_mat(col, 0.35, true), Vector3(0, r, 0))
             var st := CylinderMesh.new()
             st.top_radius = 0.004
@@ -2554,7 +2569,7 @@ func _make_item_node(id: int, v: float) -> Node3D:
             var m := _item_mat(Color(0.95, 0.82, 0.18), 0.5, false)
             _item_mi(n, cap, m, Vector3(0, 0.03, 0), Vector3(0, 0, PI * 0.5 + 0.35))
             _item_mi(n, cap, m, Vector3(0.07, 0.035, 0), Vector3(0, 0, PI * 0.5 - 0.35))
-        5:
+        5, 62:
             var capm := SphereMesh.new()
             capm.radius = 0.07
             capm.height = 0.08
@@ -2563,7 +2578,7 @@ func _make_item_node(id: int, v: float) -> Node3D:
             stem.bottom_radius = 0.026
             stem.height = 0.08
             _item_mi(n, stem, _item_mat(Color(0.9, 0.88, 0.8), 0.8, false), Vector3(0, 0.04, 0))
-            _item_mi(n, capm, _item_mat(Color(0.62, 0.3, 0.18), 0.6, false), Vector3(0, 0.09, 0))
+            _item_mi(n, capm, _item_mat(Color(0.62, 0.3, 0.18) if id == 5 else Color(0.3, 0.16, 0.08), 0.6, false), Vector3(0, 0.09, 0))
         6:
             var cy := CylinderMesh.new()
             cy.top_radius = 0.016
@@ -2571,6 +2586,31 @@ func _make_item_node(id: int, v: float) -> Node3D:
             cy.height = 0.7 * vr
             cy.radial_segments = 8
             _item_mi(n, cy, _bark_mat(), Vector3(0, 0.02, 0), Vector3(0, v * TAU, PI * 0.5))
+        9:
+            var rod := CylinderMesh.new()
+            rod.top_radius = 0.006
+            rod.bottom_radius = 0.014
+            rod.height = 1.1
+            _item_mi(n, rod, _item_mat(Color(0.4, 0.27, 0.12), 0.7, false), Vector3(0, 0.03, 0), Vector3(0, v * TAU, PI * 0.5))
+            var reel := CylinderMesh.new()
+            reel.top_radius = 0.03
+            reel.bottom_radius = 0.03
+            reel.height = 0.025
+            _item_mi(n, reel, _item_mat(Color(0.5, 0.5, 0.52), 0.3, false), Vector3(0, 0.06, 0), Vector3(PI * 0.5, 0, 0))
+        50, 51, 60, 61:
+            var fb := SphereMesh.new()
+            fb.radius = 0.1
+            fb.height = 0.2
+            var cooked := id >= 60
+            var fc := Color(0.62, 0.66, 0.7) if id in [50, 60] else Color(0.55, 0.45, 0.4)
+            if cooked:
+                fc = Color(0.55, 0.32, 0.14)
+            var fm := _item_mat(fc, 0.3, not cooked)
+            var body := _item_mi(n, fb, fm, Vector3(0, 0.05, 0))
+            body.scale = Vector3(1.9, 0.6, 0.7)
+            var tail := PrismMesh.new()
+            tail.size = Vector3(0.12, 0.1, 0.02)
+            _item_mi(n, tail, fm, Vector3(-0.22, 0.05, 0), Vector3(0, 0, PI * 0.5))
         7:
             var rm := _lumpy_rock()
             var mi := _item_mi(n, rm, _rock_mat(), Vector3(0, 0.02, 0))
@@ -2706,6 +2746,8 @@ func _update_items(_delta: float) -> void:
             btxt = "Pick up Skunk"
     pick_cand = best
     pick_text = btxt
+    _update_fire()
+    _update_fishing()
 
 
 func do_pick() -> void:
@@ -2714,6 +2756,9 @@ func do_pick() -> void:
     var kind := pick_cand.substr(0, 1)
     var key := pick_cand.substr(2)
     pick_cand = ""
+    if kind == "f":
+        _reel()
+        return
     player.set("squat", 0.3)
     if kind == "g" and ground.has(key):
         var g: Dictionary = ground[key]
@@ -2758,6 +2803,43 @@ func _bag_action(act: String) -> void:
         _bag_add(bag_sel, -1)
         bag_open = false
         player.call("play_gesture", 9)
+    elif act == "cook":
+        if not near_fire():
+            _toast("Stand next to a campfire to cook")
+        elif COOK.has(bag_sel):
+            var out_id: int = COOK[bag_sel]
+            _bag_add(bag_sel, -1)
+            _bag_add(out_id, 1)
+            _toast("Cooked: " + str(ITEMS[out_id]["n"]))
+            bag_open = false
+            player.call("play_gesture", 18)
+    elif act == "fire":
+        var m2: Node3D = player.get("model")
+        var yw := 0.0
+        if m2 != null:
+            yw = m2.rotation.y
+        var fp: Vector3 = player.global_position + Vector3(-sin(yw), 0, -cos(yw)) * 1.4
+        if height_at(fp.x, fp.z) < -0.3:
+            _toast("Can't light a fire in water")
+        else:
+            _bag_add(6, -3)
+            fire_n += 1
+            var fk := "f%s_%d" % [net_id, fire_n]
+            _make_fire(fk, fp.x, fp.z)
+            _ev_send({"k": "fire", "key": fk, "x": snappedf(fp.x, 0.01), "z": snappedf(fp.z, 0.01)})
+            _toast("Campfire lit (lasts 15 min)")
+            bag_open = false
+            player.call("play_gesture", 18)
+    elif act == "rod":
+        if int(bag.get("6", 0)) >= 2 and int(bag.get("8", 0)) >= 1:
+            _bag_add(6, -2)
+            _bag_add(8, -1)
+            _bag_add(9, 1)
+            bag_sel = 9
+            _toast("Made a Fishing rod")
+    elif act == "cast":
+        bag_open = false
+        _cast()
     elif act == "drop":
         var m: Node3D = player.get("model")
         var yaw := 0.0
@@ -2794,6 +2876,8 @@ func _item_event(d) -> void:
         var id := int(d.get("id", 0))
         if ITEMS.has(id):
             _item_drop(str(d.get("key", "")), id, float(d.get("x", 0)), float(d.get("z", 0)))
+    elif k == "fire":
+        _make_fire(str(d.get("key", "")), float(d.get("x", 0)), float(d.get("z", 0)))
     elif k == "an":
         var i := int(d.get("i", -1))
         if i >= 0 and i < fauna.size():
@@ -2805,6 +2889,180 @@ func _item_event(d) -> void:
             fauna[j]["held"] = false
             fauna[j]["c"] = Vector2(float(d.get("cx", 0)), float(d.get("cz", 0)))
             (fauna[j]["node"] as Node3D).visible = true
+
+
+
+func _toast(t: String) -> void:
+    toast_text = t
+    toast_until = Time.get_ticks_msec() * 0.001 + 2.6
+
+
+func _make_fire(key: String, x: float, z: float) -> void:
+    if flame_tex == null:
+        flame_tex = GradientTexture2D.new()
+        var gr := Gradient.new()
+        gr.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+        flame_tex.gradient = gr
+        flame_tex.fill = GradientTexture2D.FILL_RADIAL
+        flame_tex.fill_from = Vector2(0.5, 0.5)
+        flame_tex.fill_to = Vector2(0.5, 0.0)
+        flame_tex.width = 64
+        flame_tex.height = 64
+    var n := Node3D.new()
+    n.position = Vector3(x, height_at(x, z), z)
+    add_child(n)
+    var wood := _bark_mat()
+    for i in 3:
+        var st := CylinderMesh.new()
+        st.top_radius = 0.025
+        st.bottom_radius = 0.03
+        st.height = 0.55
+        st.radial_segments = 8
+        var mi := MeshInstance3D.new()
+        mi.mesh = st
+        mi.material_override = wood
+        mi.position = Vector3(cos(i * TAU / 3.0) * 0.08, 0.2, sin(i * TAU / 3.0) * 0.08)
+        mi.rotation = Vector3(sin(i * TAU / 3.0) * 0.45, 0, -cos(i * TAU / 3.0) * 0.45)
+        n.add_child(mi)
+    for i in 6:
+        var rk := MeshInstance3D.new()
+        rk.mesh = _lumpy_rock()
+        rk.material_override = _rock_mat()
+        rk.scale = Vector3.ONE * 0.07
+        rk.position = Vector3(cos(i * TAU / 6.0) * 0.32, 0.03, sin(i * TAU / 6.0) * 0.32)
+        n.add_child(rk)
+    var pt := GPUParticles3D.new()
+    pt.amount = 22
+    pt.lifetime = 0.9
+    var pm := ParticleProcessMaterial.new()
+    pm.direction = Vector3(0, 1, 0)
+    pm.spread = 16.0
+    pm.initial_velocity_min = 0.5
+    pm.initial_velocity_max = 1.0
+    pm.gravity = Vector3(0, 0.9, 0)
+    pm.scale_min = 0.5
+    pm.scale_max = 1.1
+    pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+    pm.emission_sphere_radius = 0.1
+    var cg := Gradient.new()
+    cg.colors = PackedColorArray([Color(1.0, 0.85, 0.3, 1.0), Color(1.0, 0.35, 0.05, 0.7), Color(0.2, 0.05, 0.0, 0.0)])
+    var ct := GradientTexture1D.new()
+    ct.gradient = cg
+    pm.color_ramp = ct
+    pt.process_material = pm
+    var qm := QuadMesh.new()
+    qm.size = Vector2(0.3, 0.3)
+    var qmat := StandardMaterial3D.new()
+    qmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    qmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    qmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    qmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+    qmat.vertex_color_use_as_albedo = true
+    qmat.albedo_texture = flame_tex
+    qm.material = qmat
+    pt.draw_pass_1 = qm
+    pt.position = Vector3(0, 0.25, 0)
+    pt.visibility_range_end = 90.0
+    n.add_child(pt)
+    var lt := OmniLight3D.new()
+    lt.light_color = Color(1.0, 0.6, 0.25)
+    lt.omni_range = 9.0
+    lt.light_energy = 2.0
+    lt.position = Vector3(0, 0.6, 0)
+    n.add_child(lt)
+    fires.append({"key": key, "node": n, "light": lt, "until": Time.get_ticks_msec() * 0.001 + 900.0})
+
+
+func near_fire() -> bool:
+    var pp: Vector3 = player.global_position
+    for f in fires:
+        if (f["node"] as Node3D).global_position.distance_to(pp) < 3.2:
+            return true
+    return false
+
+
+func _update_fire() -> void:
+    var now := Time.get_ticks_msec() * 0.001
+    var i := fires.size() - 1
+    while i >= 0:
+        var f: Dictionary = fires[i]
+        if now > float(f["until"]):
+            (f["node"] as Node3D).queue_free()
+            fires.remove_at(i)
+        else:
+            (f["light"] as OmniLight3D).light_energy = 1.8 + sin(now * 17.0 + i) * 0.35 + sin(now * 29.0) * 0.25
+        i -= 1
+
+
+func _update_fishing() -> void:
+    var now := Time.get_ticks_msec() * 0.001
+    if fish_state == 0:
+        return
+    if (player.velocity as Vector3).length() > 1.0 or not player.is_on_floor():
+        _fish_stop()
+        return
+    if bobber != null:
+        var dip := 0.0
+        if fish_state == 2:
+            dip = -0.05 + sin(now * 25.0) * 0.03
+        bobber.position = Vector3(fish_pos.x, -0.36 + dip + sin(now * 2.0) * 0.015, fish_pos.z)
+    if fish_state == 1 and now > fish_at:
+        fish_state = 2
+        fish_until = now + 2.4
+    elif fish_state == 2 and now > fish_until:
+        _toast("It got away...")
+        _fish_stop()
+    if fish_state == 2:
+        pick_cand = "f:x"
+        pick_text = "Reel in!"
+    elif fish_state == 1:
+        pick_cand = ""
+        pick_text = ""
+
+
+func _fish_stop() -> void:
+    fish_state = 0
+    if bobber != null:
+        bobber.queue_free()
+        bobber = null
+
+
+func _cast() -> void:
+    var m: Node3D = player.get("model")
+    var yaw := 0.0
+    if m != null:
+        yaw = m.rotation.y
+    var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
+    var pp: Vector3 = player.global_position
+    var tgt := pp + fwd * 3.2
+    if height_at(tgt.x, tgt.z) > -0.6:
+        _toast("Face deep water to cast")
+        return
+    fish_pos = tgt
+    fish_state = 1
+    fish_at = Time.get_ticks_msec() * 0.001 + 3.0 + randf() * 5.0
+    player.call("play_gesture", 17)
+    if bobber == null:
+        bobber = MeshInstance3D.new()
+        var sp := SphereMesh.new()
+        sp.radius = 0.05
+        sp.height = 0.1
+        bobber.mesh = sp
+        var bm := StandardMaterial3D.new()
+        bm.albedo_color = Color(0.9, 0.1, 0.1)
+        bobber.material_override = bm
+        add_child(bobber)
+    bobber.position = Vector3(tgt.x, -0.36, tgt.z)
+    _toast("Cast! Wait for a bite...")
+
+
+func _reel() -> void:
+    if fish_state == 2:
+        var id := 50 if randf() < 0.6 else 51
+        _bag_add(id, 1)
+        _toast("You caught a %s!" % ITEMS[id]["n"])
+        player.call("play_gesture", 17)
+    _fish_stop()
 
 
 func bag_layout() -> Array:
@@ -2820,7 +3078,7 @@ func bag_layout() -> Array:
     var h := 50.0 * u
     var gap := 8.0 * u
     var rows := maxi(1, int(ceil(float(ids.size()) / float(cols))))
-    var pw := cols * (w + gap) + gap
+    var pw := maxf(cols * (w + gap) + gap, 780.0 * u)
     var ph := 64.0 * u + rows * (h + gap) + 70.0 * u
     var x0 := (s.x - pw) * 0.5
     var y0 := maxf(8.0, (s.y - ph) * 0.5)
@@ -2834,6 +3092,18 @@ func bag_layout() -> Array:
     if bag_sel != 0 and ITEMS.has(bag_sel):
         if ITEMS[bag_sel].has("eat"):
             out.append({"rect": Rect2(bx, by, bw, 46.0 * u), "act": "eat", "text": "EAT"})
+            bx += bw + gap
+        if COOK.has(bag_sel):
+            out.append({"rect": Rect2(bx, by, bw, 46.0 * u), "act": "cook", "text": "COOK"})
+            bx += bw + gap
+        if bag_sel == 6 and int(bag.get("6", 0)) >= 3:
+            out.append({"rect": Rect2(bx, by, bw * 1.5, 46.0 * u), "act": "fire", "text": "FIRE (3 sticks)"})
+            bx += bw * 1.5 + gap
+        if (bag_sel == 6 or bag_sel == 8) and int(bag.get("6", 0)) >= 2 and int(bag.get("8", 0)) >= 1:
+            out.append({"rect": Rect2(bx, by, bw * 1.9, 46.0 * u), "act": "rod", "text": "MAKE ROD (2 stick+vine)"})
+            bx += bw * 1.9 + gap
+        if bag_sel == 9:
+            out.append({"rect": Rect2(bx, by, bw, 46.0 * u), "act": "cast", "text": "CAST"})
             bx += bw + gap
         out.append({"rect": Rect2(bx, by, bw * 1.2, 46.0 * u), "act": "drop", "text": "RELEASE" if ITEMS[bag_sel].has("animal") else "DROP"})
     out.append({"rect": Rect2(x0 + pw - bw - gap, by, bw, 46.0 * u), "act": "close", "text": "CLOSE"})
@@ -3879,6 +4149,10 @@ class Hud extends Control:
         if main.bag_open:
             _draw_bag(font, s, u)
 
+        if main.toast_text != "" and Time.get_ticks_msec() * 0.001 < main.toast_until:
+            var tw := font.get_string_size(main.toast_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+            draw_rect(Rect2(s.x * 0.5 - tw * 0.5 - 14, 54, tw + 28, 42), Color(0, 0, 0, 0.6), true)
+            draw_string(font, Vector2(s.x * 0.5 - tw * 0.5, 84), main.toast_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1, 1, 0.85, 1))
         var t: float = main.time_of_day
         var hrs := int(t * 24.0)
         var mins := int(fmod(t * 24.0, 1.0) * 60.0)
