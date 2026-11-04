@@ -28,4 +28,5 @@ pointing/emulate_touch_from_mouse=true
 textures/vram_compression/import_etc2_astc=true
 
 renderer/rendering_method="mobile"
+renderer/rendering_method.web="gl_compatibility"
 anti_aliasing/quality/msaa_3d/mode=2

@@ -367,6 +367,17 @@ void fragment() {
 """
 
 
+func _water_code() -> String:
+    if not OS.has_feature("web"):
+        return WATER_CODE
+    # browser (compatibility renderer): no depth-texture foam
+    var c := WATER_CODE.replace("uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;", "")
+    var a := c.find("    float d = texture(depth_tex")
+    var b := c.find("    float deep =")
+    c = c.substr(0, a) + "    float thick = 2.5;\n\n" + c.substr(b)
+    return c
+
+
 func _build_water() -> void:
     var wn := FastNoiseLite.new()
     wn.frequency = 0.02
@@ -379,7 +390,7 @@ func _build_water() -> void:
     nt.width = 512
     nt.height = 512
     var sh := Shader.new()
-    sh.code = WATER_CODE
+    sh.code = _water_code()
     var inner := ShaderMaterial.new()
     inner.shader = sh
     inner.set_shader_parameter("nmap", nt)
@@ -392,8 +403,9 @@ func _build_water() -> void:
     # near the island: finely cut plane so the waves really move
     var pm := PlaneMesh.new()
     pm.size = Vector2(760, 760)
-    pm.subdivide_width = 240
-    pm.subdivide_depth = 240
+    var subd := 240 if not OS.has_feature("web") else 110
+    pm.subdivide_width = subd
+    pm.subdivide_depth = subd
     var mi := MeshInstance3D.new()
     mi.mesh = pm
     mi.material_override = inner
@@ -849,7 +861,7 @@ func _build_meadow() -> void:
                 var oz := -SIZE * 0.5 + cz * cs
                 if Vector2(ox + cs * 0.5, oz + cs * 0.5).length() > R * 1.0:
                     continue
-                for k in int(d[1]):
+                for k in (int(d[1]) if not OS.has_feature("web") else int(d[1]) / 2):
                     var x := ox + rng.randf() * cs
                     var z := oz + rng.randf() * cs
                     var h := height_at(x, z)
@@ -1096,7 +1108,7 @@ func _build_forest() -> void:
     var tree_body := StaticBody3D.new()
     var count := 0
     for n in TREE_TRIES:
-        if count >= TREE_MAX:
+        if count >= (TREE_MAX if not OS.has_feature("web") else 700):
             break
         var a := rng.randf() * TAU
         var r := sqrt(rng.randf()) * R * 0.92
