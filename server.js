@@ -2,7 +2,7 @@
 // player positions + voice-chat signalling between people in the same room code.
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = process.env.PORT || 3000, PUB = __dirname, HIDDEN = new Set(['server.js','package.json','README.md','package-lock.json','accounts.json']), MAX = 8;
-const MIME = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
+const MIME = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.glb':'model/gltf-binary','.jpg':'image/jpeg'};
 const rooms = new Map(); // code -> Map(id -> {res, p, s})
 const clean = (v, n) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, n);
 function sse(res, obj) { res.write('data: ' + JSON.stringify(obj) + '\n\n'); }
