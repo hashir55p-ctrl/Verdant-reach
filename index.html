@@ -325,6 +325,7 @@ button{font-family:inherit}
     <div class="topbtns">
       <button id="micBtn" class="ctl pill glass off" type="button" aria-pressed="false" aria-label="Toggle your microphone">Mic off</button>
       <button id="invBtn" class="ctl pill glass off" type="button" aria-label="Invite friends">Invite</button>
+      <button id="jeepBtn" class="ctl pill glass" type="button" aria-label="Call the nearest jeep to you">Call jeep</button>
       <button id="orbBtn" class="ctl ib glass" type="button" aria-pressed="false" aria-label="360 degree view of your character"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
       <button id="bagBtn" class="ctl ib glass" type="button" aria-label="Open your collection"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1.2 10.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 9zM8.5 9a3.5 3.5 0 0 1 7 0"/></svg></button>
       <button id="menuBtn" class="ctl ib glass" type="button" aria-label="Open menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1842,6 +1843,29 @@ async function build(){
           else if(u<28.5){turn=Math.PI*(1-sst(0,1,(u-26.5)/2))}
           yaw=y0+turn;x=L[0]+Math.sin(y0)*off;z=L[1]+Math.cos(y0)*off;y=Math.max(heightAt(x,z),-0.2)-0.02;
         }
+        /* scared off by anyone walking close: fly away, circle, then come back and land at the scheduled spot */
+        if(!f.fl&&W>(f.fcd||0)){
+          let bd=1e9,bx=0,bz=0;
+          const chk=(px,pz,sp2)=>{const d=Math.hypot(px-x,pz-z);if(d<(sp2>3?14:9)&&d<bd){bd=d;bx=x-px;bz=z-pz}};
+          chk(P.x,P.z,Math.hypot(vx,vz));for(const r of remotes.values())if(!r.fresh&&r.av)chk(r.x,r.z,r.sp||0);
+          if(bd<1e9){const l=Math.hypot(bx,bz)||1;f.fl={t0:W,sx:x,sz:z,dx:bx/l,dz:bz/l,sy:y}}
+        }
+        if(f.fl){
+          const q0=f.fl,ft=W-q0.t0;
+          if(ft>24){f.fl=null;f.fcd=W+25}
+          else if(ft<9){
+            const q=sst(0,1,ft/9),gh=Math.max(heightAt(x,z),0);
+            x=q0.sx+q0.dx*60*q;z=q0.sz+q0.dz*60*q;y=Math.max(heightAt(x,z),0)+1.5+(14+f.alt*0.2)*sst(0,1,ft/4);
+            yaw=Math.atan2(q0.dx,q0.dz);bank=0;rot='YZX';
+            if(ft<2.5)clip='takeoff';else{const s2=(W+f.t0)%(f.flap+f.glide);clip=s2<f.flap?'fly':'glide'}
+          }else{
+            const q=sst(0,1,(ft-9)/15),fx0=q0.sx+q0.dx*60,fz0=q0.sz+q0.dz*60,tx=x,tz=z,ty=y;
+            x=fx0+(tx-fx0)*q;z=fz0+(tz-fz0)*q;
+            y=ty+(14+f.alt*0.2)*(1-sst(0.2,1,q))*(1-q);y=Math.max(y,Math.max(heightAt(x,z),0)+0.3);
+            yaw=Math.atan2(tx-fx0,tz-fz0);bank=0;
+            if(ft>21.2)clip='land';else{const s2=(W+f.t0)%(f.flap+f.glide);clip=s2<f.flap?'fly':'glide'}
+}
+        }
         const dxc=x-cam.x,dzc=z-cam.z;if(dxc*dxc+dzc*dzc>260*260){f.g.visible=false;continue}
       }
       f.g.visible=true;f.g.rotation.order=rot;f.g.position.set(x,y,z);f.g.rotation.y=yaw;f.g.rotation.x=pit;f.g.rotation.z=bank;
@@ -2885,7 +2909,7 @@ async function build(){
   /* BGMI-style driving controls: steer arrows bottom-left, brake + accelerator pedals bottom-right, handbrake, horn, get-off, speed gauge */
   const dui={L:0,R:0,gas:0,brk:0,hb:0,horn:0};
   {const st=document.createElement('style');
-  st.textContent=`body.drv #stick,body.drv #flyBtn,body.drv #runBtn,body.drv #emoBtn,body.drv #jumpBtn,body.drv #grabBtn,body.drv #orbBtn,body.drv #bagBtn,body.drv #grabHint,body.drv #viewBtn{display:none!important}
+  st.textContent=`body.drv #stick,body.drv #flyBtn,body.drv #runBtn,body.drv #emoBtn,body.drv #jumpBtn,body.drv #grabBtn,body.drv #orbBtn,body.drv #jeepBtn,body.drv #bagBtn,body.drv #grabHint,body.drv #viewBtn{display:none!important}
 #carUI{position:fixed;inset:0;z-index:31;display:none;pointer-events:none;touch-action:none;font-family:system-ui,sans-serif;color:#fff}
 #carUI button{pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border:1.5px solid rgba(255,255,255,.38);background:rgba(12,22,30,.5);color:#fff;backdrop-filter:blur(6px);display:grid;place-items:center;padding:0;cursor:pointer;transition:transform .06s,background .06s}
 #carUI button.on{background:rgba(255,176,56,.82);color:#1b1206;transform:scale(.94)}
@@ -2921,6 +2945,23 @@ async function build(){
     if(on&&!hornA&&ac){try{const g=ac.createGain(),o1=ac.createOscillator(),o2=ac.createOscillator();o1.type=o2.type='square';o1.frequency.value=392;o2.frequency.value=494;g.gain.value=0.0;g.gain.setTargetAtTime(0.07,ac.currentTime,0.01);o1.connect(g);o2.connect(g);g.connect(ac.destination);o1.start();o2.start();hornA={g,o1,o2}}catch(e){hornA=null}}
     else if(!on&&hornA){const h=hornA;hornA=null;try{h.g.gain.setTargetAtTime(0,ac.currentTime,0.02);setTimeout(()=>{try{h.o1.stop();h.o2.stop();h.g.disconnect()}catch(e){}},150)}catch(e){}}
   }
+  /* call the nearest free jeep: it appears 8-18 m ahead of you on clear flat ground; the button shows distance and direction */
+  function callJeep(){
+    if(drv||!CARS.length)return;
+    let c=null,bd=1e9;for(const q of CARS){if(q.by)continue;const d=Math.hypot(q.x-P.x,q.z-P.z);if(d<bd){bd=d;c=q}}
+    if(!c){toast('All jeeps are in use');return}
+    const sy=Math.sin(yaw),cy=Math.cos(yaw);
+    for(let i=0;i<40;i++){
+      const a=(i%2?1:-1)*Math.floor(i/2)*0.18,dd=8+(i%5)*2.5,dx=-Math.sin(yaw+a)*dd,dz=-Math.cos(yaw+a)*dd,x=P.x+dx,z=P.z+dz;
+      if(carClear(x,z)){placeCar(c,x,z,Math.atan2(sy,cy)+Math.PI*0.5);toast('Jeep is here - walk up and press Grab');return}
+    }
+    toast('No clear ground here - walk to flat land and try again');
+  }
+  {const jb=$('#jeepBtn');if(jb){jb.addEventListener('click',callJeep);let jt=0;
+    extraTick.push((T,dt)=>{jt-=dt;if(jt>0||drv)return;jt=0.5;let bd=1e9,c=null;for(const q of CARS){const d=Math.hypot(q.x-P.x,q.z-P.z);if(d<bd){bd=d;c=q}}
+      if(!c){jb.textContent='Call jeep';return}
+      const a=Math.atan2(-(c.x-P.x),-(c.z-P.z))-yaw,ar=['\u2191','\u2197','\u2192','\u2198','\u2193','\u2199','\u2190','\u2196'][((Math.round(a/(Math.PI/4))%8)+8)%8];
+      jb.textContent='Call jeep '+(bd<4?'(here)':ar+' '+Math.round(bd)+' m')})}}
   function enterCar(c){
     if(drv||c.by)return;
     if(flying)setFly(false);if(orb.on)setOrbit(false);if(hand)dropHand(true);
@@ -3686,7 +3727,32 @@ async function build(){
     const U=av.userData;let r;
     if(U.drv){r=poseAvatar0(av,5,0,0,0);for(let i=0;i<2;i++){U.arms[i].rotation.set(1.25,0,(i?1:-1)*0.1);if(U.fore)U.fore[i].rotation.set(0.45,0,0)}U.up.rotation.x=0.04}
     else r=poseAvatar0(av,gid,gt,swing,amt);
+    if(U.swim>0.02&&!U.drv)swimPose(av,U,r);
     if(U.frB)frPose(av);return r}
+  /* swimming: front crawl when fast, breaststroke when slow, treading water when still. Blended over the normal pose by U.swim */
+  const SWS={fs:1,ls:1};
+  function swimSet(av,x,z,sp){const U=av.userData,t=heightAt(x,z)<-0.8?1:0,c=U.swim||0;const tn=performance.now()/1000,dt=Math.min(0.5,tn-(U.swt||tn));U.swt=tn;U.swim=Math.abs(t-c)<0.02?t:c+(t-c)*(1-Math.exp(-dt*6));U.swSp=sp;if(!t&&U.swim<0.02){if(U.swim){av.rotation.x=av.rotation.z=0}U.swim=0}}
+  function swimPose(av,U,r){
+    const tn=performance.now()/1000,dt=Math.min(0.1,tn-(U.stn||tn));U.stn=tn;
+    const sp=U.swSp||0,wc=sst(3.8,4.6,sp),wb=sst(0.5,1.2,sp)*(1-wc),wt=1-wb-wc,S=U.swim,fs=SWS.fs,PI=Math.PI;
+    U.sph=(U.sph||0)+dt*(wc*5.4+wb*2.9+wt*2.4);const ph=U.sph,u=((ph/(2*PI))%1+1)%1;
+    const B=(o,x,y,z)=>{o.rotation.x+=(x-o.rotation.x)*S;o.rotation.y+=(y-o.rotation.y)*S;o.rotation.z+=(z-o.rotation.z)*S};
+    const {legs,arms,up,fore}=U;
+    for(let i=0;i<2;i++){
+      const sg=i?1:-1,o=i*PI,c=ph+o;
+      /* crawl */
+      const cax=fs*(c%(2*PI)),caz=sg*0.22,cfa=0.15+Math.max(0,-Math.sin(c))*1.2,clg=fs*Math.sin(ph*2.6+o)*0.4;
+      /* breaststroke */
+      const bax=fs*(2.9-1.6*sst(0.25,0.7,u)+0.4*sst(0.8,1,u)),baz=sg*(0.15+0.95*Math.sin(PI*sst(0,0.5,u))*(1-sst(0.5,0.8,u))),bfa=0.2+0.9*sst(0.4,0.7,u)*(1-sst(0.85,1,u)),blg=fs*(0.15+0.7*Math.sin(PI*sst(0.3,1,u)));
+      /* tread */
+      const tax=fs*0.55,taz=sg*(0.85+0.28*Math.sin(ph*2+o)),tfa=0.9,tlg=fs*(0.75+0.35*Math.sin(ph*2+o));
+      const ax=wc*cax+wb*bax+wt*tax,az=wc*caz+wb*baz+wt*taz,fa=wc*cfa+wb*bfa+wt*tfa,lg=wc*clg+wb*blg+wt*tlg;
+      B(arms[i],ax,0,az);if(fore)B(fore[i],fa,0,0);B(legs[i],lg,0,sg*wt*0.15);
+    }
+    B(up,0.04,Math.sin(ph)*0.2*wc,0);
+    const lean=wc*1.3+wb*(1.05+0.12*Math.sin(u*2*PI))+wt*(0.1+0.03*Math.sin(ph));
+    av.rotation.x=SWS.ls*lean*S;av.rotation.z=Math.sin(ph)*0.26*wc*S;
+    r.oy=r.oy*(1-S)+(wt*-0.3+(1-wt)*0.75)*S}
   function poseAvatar0(av,gid,gt,swing,amt){
     const {legs,arms,up,fore}=av.userData;av.rotation.order='YXZ';av.rotation.x=0;
     legs[0].rotation.set(0,0,0);legs[1].rotation.set(0,0,0);arms[0].rotation.set(0,0,0);arms[1].rotation.set(0,0,0);up.rotation.set(0,0,0);
@@ -4119,7 +4185,8 @@ async function build(){
     const sp=Math.hypot(vx,vz);myPh+=sp*dt*1.9;
     const amt=Math.min(1,sp/3.5),sw=Math.sin(myPh)*0.75*amt;
     syncHeld(myAv,heldCode());
-    const gid=sp>1.2?0:myG,po=poseAvatar(myAv,gid,myGT,sw,amt);
+    swimSet(myAv,P.x,P.z,sp);
+    const gid=(sp>1.2||myAv.userData.swim>0.5)?0:myG,po=poseAvatar(myAv,gid,myGT,sw,amt);
     myAv.position.set(eyeV.x,eyeV.y-1.7+po.oy,eyeV.z);myAv.rotation.y=yaw+po.yo;
     if(gid){
       if(!myBub){myBub=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,depthWrite:false,fog:false,toneMapped:false}));myBub.scale.set(0.62,0.62,1);myBub.renderOrder=10;myAv.add(myBub)}
@@ -4206,6 +4273,11 @@ async function build(){
       const len=Math.hypot(x,y),mx=R-12,far=len>mx;if(far){x*=mx/len;y*=mx/len}
       mctx.globalAlpha=far?0.7:1;mctx.beginPath();mctx.arc(x,y,far?7:9,0,6.283);mctx.fillStyle=shirt(r);mctx.fill();mctx.lineWidth=3;mctx.strokeStyle='#fff';mctx.stroke();
     }
+    for(const c of CARS){
+      const dx=(c.x-eyeV.x)*ppm,dz=(c.z-eyeV.z)*ppm;let x=dx*cs-dz*sn,y=dx*sn+dz*cs;
+      const len=Math.hypot(x,y),mx=R-12;if(len>mx){x*=mx/len;y*=mx/len}
+      mctx.globalAlpha=1;mctx.fillStyle='#ffc21a';mctx.fillRect(x-6,y-6,12,12);mctx.lineWidth=2.5;mctx.strokeStyle='#14202a';mctx.strokeRect(x-6,y-6,12,12);
+    }
     mctx.globalAlpha=1;
     mctx.beginPath();mctx.moveTo(0,-13);mctx.lineTo(9,10);mctx.lineTo(0,5);mctx.lineTo(-9,10);mctx.closePath();mctx.fillStyle='#ffc56b';mctx.fill();mctx.lineWidth=2.5;mctx.strokeStyle='#14202a';mctx.stroke();
     const nx=Math.sin(yaw)*(R-16),ny=-Math.cos(yaw)*(R-16);
@@ -4228,6 +4300,7 @@ async function build(){
       if(r.fresh)continue;const q=w2c(r.x,r.z,S);
       bctx.beginPath();bctx.arc(q[0],q[1],11,0,6.283);bctx.fillStyle=shirt(r);bctx.fill();bctx.lineWidth=4;bctx.strokeStyle='#fff';bctx.stroke();label(r.pf.n,q[0],q[1]-15,'#fff');
     }
+    for(const c of CARS){const q=w2c(c.x,c.z,S);bctx.fillStyle='#ffc21a';bctx.fillRect(q[0]-7*fs,q[1]-7*fs,14*fs,14*fs);bctx.lineWidth=2.5;bctx.strokeStyle='#14202a';bctx.strokeRect(q[0]-7*fs,q[1]-7*fs,14*fs,14*fs);label('Jeep',q[0],q[1]-10*fs,'#ffe08a')}
     const m=w2c(eyeV.x,eyeV.z,S);bctx.save();bctx.translate(m[0],m[1]);bctx.rotate(yaw);
     bctx.beginPath();bctx.moveTo(0,-16);bctx.lineTo(12,13);bctx.lineTo(0,7);bctx.lineTo(-12,13);bctx.closePath();bctx.fillStyle='#ffc56b';bctx.fill();bctx.lineWidth=3;bctx.strokeStyle='#14202a';bctx.stroke();bctx.restore();
     label('You',m[0],m[1]-20,'#ffd9a0');
@@ -4296,7 +4369,8 @@ async function build(){
       }
       const amt=Math.min(1,r.sp/3.5),sw=Math.sin(r.ph)*0.75*amt;
       syncHeld(r.av,r.held||0);
-      const gid=r.sp>1.2?0:r.g,po=poseAvatar(r.av,gid,r.gt,sw,amt);
+      swimSet(r.av,r.x,r.z,r.sp);
+      const gid=(r.sp>1.2||r.av.userData.swim>0.5)?0:r.g,po=poseAvatar(r.av,gid,r.gt,sw,amt);
       r.av.position.y=r.y+po.oy;r.av.rotation.y=r.yaw+po.yo;
       if(gid&&d<70){
         if(!r.bub){r.bub=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,depthWrite:false,fog:false,toneMapped:false}));r.bub.scale.set(0.62,0.62,1);r.bub.renderOrder=10;r.av.add(r.bub)}
