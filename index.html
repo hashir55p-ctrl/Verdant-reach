@@ -1752,6 +1752,103 @@ async function build(){
       const f=Math.sin(W*(b.flap||7)+b.ph*5)*(b.flap===4?0.4:0.55);b.w1.rotation.z=f;b.w2.rotation.z=-f;
     }
   });
+  /* ================= realistic rigged fauna (Slate GLBs with baked clips): bulls, skunks, egrets, carp. Clock-driven, so every player sees the same ================= */
+  const GF=[];
+  const sst=(a,b,x)=>{x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x)};
+  const gfR=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  function cycDist(s,walk,ramp,v){const R=Math.min(ramp,walk*0.45);if(s<=0)return 0;if(s<R){const x=s/R;return v*R*(x*x*x-x*x*x*x*0.5)}if(s<walk-R)return v*(R*0.5+(s-R));const base=v*(R*0.5+(walk-2*R));if(s<walk){const y=(s-(walk-R))/R;return base+v*R*(y-y*y*y+y*y*y*y*0.5)}return v*(walk-R)}
+  function cycSpeed(s,walk,ramp){const R=Math.min(ramp,walk*0.45);if(s<=0||s>=walk)return 0;if(s<R)return sst(0,1,s/R);if(s>walk-R)return sst(0,1,(walk-s)/R);return 1}
+  function gfLoad(u){return fetch(u).then(r=>{if(!r.ok)throw new Error(u);return r.arrayBuffer()}).then(b=>new Promise((ok,no)=>new THREE.GLTFLoader().parse(b,'',g=>ok(g),no)))}
+  function gfSpawn(G,sc,cast){
+    const root=THREE.SkeletonUtils.clone(G.scene);
+    root.traverse(o=>{if(o.isMesh){o.frustumCulled=false;o.castShadow=!!cast}});
+    const g=new THREE.Group();g.add(root);g.visible=false;g.scale.setScalar(sc);scene.add(g);
+    const mx=new THREE.AnimationMixer(root),acts={};
+    for(const c of G.animations){const a=mx.clipAction(c);a.loop=THREE.LoopRepeat;acts[c.name]=a}
+    return {g,mx,acts,cur:null,sc};
+  }
+  function gfPlay(f,name,ts,fade){
+    const n=f.acts[name];if(!n)return;
+    if(f.cur!==name){const p=f.acts[f.cur];n.reset().play();if(p){n.crossFadeFrom(p,fade||0.4,false)}else n.fadeIn(fade||0.4);f.cur=name}
+    n.setEffectiveTimeScale(ts);
+  }
+  function gfSpot(rnd,cx,cz,rad,hmin,hmax,smax,extra){
+    for(let t=0;t<600;t++){const a=rnd()*6.283,rr=Math.sqrt(rnd())*rad,x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr,h=heightAt(x,z);
+      if(h<hmin||h>hmax||slopeAt(x,z)>smax||(extra&&!extra(x,z,h)))continue;return [x,z]}
+    return null;
+  }
+  Promise.all(['bull','skunk','egret','carp'].map(k=>gfLoad('an_'+k+'.glb'))).then(([bull,skunk,egret,carp])=>{
+    const rnd=gfR(5150);
+    const free=(x,z)=>!SITES.some(q=>Math.hypot(x-q.x,z-q.z)<q.r*0.95);
+    const walker=(G,n,cx,cz,rad,hmin,smax,o,pred)=>{for(let i=0;i<n;i++){
+      const p=gfSpot(rnd,cx,cz,rad,hmin,60,smax,pred);if(!p)continue;
+      const sc=o.s0+rnd()*(o.s1-o.s0),f=gfSpawn(G,sc,o.cast);
+      Object.assign(f,{kind:'walk',hx:p[0],hz:p[1],ax:o.r0+rnd()*(o.r1-o.r0),az:o.r0+rnd()*(o.r1-o.r0),p1:rnd()*6.28,p2:rnd()*6.28,walk:o.wt0+rnd()*3,rest:o.rt0+rnd()*3,t0:rnd()*30,v:o.v,rest_c:o.rc,ramp:o.ramp,yaw:0,i});
+      f.w1=0.9/f.ax;f.w2=0.7/f.az;GF.push(f)}};
+    {const s=SV('Willowmere');walker(bull,5,s.x+s.r*1.1+10,s.z-30,26,1.5,0.14,{s0:0.95,s1:1.1,cast:true,r0:3,r1:5,wt0:12,rt0:6,v:0.62,rc:['graze','idle'],ramp:1.6},free)}
+    walker(skunk,6,-60,-60,150,1.5,0.3,{s0:0.9,s1:1.2,cast:false,r0:1.5,r1:3,wt0:6,rt0:3,v:0.25,rc:['sniff','idle'],ramp:0.5},(x,z)=>forestMask(x,z)>0&&zoneW(DESERT,x,z)<0.2&&zoneW(FROST,x,z)<0.2&&free(x,z));
+    for(let i=0;i<5;i++){
+      const L=gfSpot(rnd,i%2?-30:200,i%2?330:-60,170,-0.2,1.3,0.3);if(!L)continue;
+      const f=gfSpawn(egret,2.2,false),er=22+rnd()*23,ph0=rnd()*6.283,sg=i%2?-1:1;
+      Object.assign(f,{kind:'egret',L,c:[L[0]-Math.cos(ph0)*er,L[1]-Math.sin(ph0)*er],r:er,ph:ph0,sg,v:4.2+rnd()*1.2,ramp:9,alt:14+rnd()*10,flap:3.5+rnd()*2.5,glide:2.5+rnd()*2,G:28+rnd()*12,t0:0,order:i%2});
+      f.F=6.283*er/f.v+9;f.t0=rnd()*(f.F+f.G);GF.push(f);
+    }
+    for(let i=0;i<14;i++){
+      const p=gfSpot(rnd,125,-60,60,-4,-0.9,0.5);if(!p)continue;
+      const f=gfSpawn(carp,3,false);Object.assign(f,{kind:'fish',hx:p[0],hz:p[1],r:2+rnd()*3,ph:rnd()*6.283,spd:(0.25+rnd()*0.25)*(i%2?-1:1),y:-0.35-rnd()*0.3,t0:rnd()*20});GF.push(f);
+    }
+  }).catch(e=>console.warn('fauna assets',e));
+  const gfPos=new THREE.Vector3();
+  extraTick.push((T,dt,cam)=>{
+    const W=Date.now()/1000;
+    for(const f of GF){
+      let x,z,y,yaw=0,bank=0,clip='idle',ts=1,rot='YXZ',pit=0;
+      if(f.kind==='walk'){
+        const cyc=f.walk+f.rest,tt=W+f.t0,k=Math.floor(tt/cyc),s=tt-k*cyc,R=Math.min(f.ramp,f.walk*0.45);
+        const tau=k*f.v*(f.walk-R)+cycDist(s,f.walk,f.ramp,f.v),sp=cycSpeed(s,f.walk,f.ramp);
+        x=f.hx+f.ax*Math.sin(f.w1*tau+f.p1);z=f.hz+f.az*Math.sin(f.w2*tau+f.p2);
+        const dx=f.ax*f.w1*Math.cos(f.w1*tau+f.p1),dz=f.az*f.w2*Math.cos(f.w2*tau+f.p2);
+        if(Math.hypot(dx,dz)>1e-3)f.yaw=Math.atan2(dx,dz);yaw=f.yaw;
+        const dxc=x-cam.x,dzc=z-cam.z;if(dxc*dxc+dzc*dzc>200*200){f.g.visible=false;continue}
+        const real=Math.hypot(dx,dz)*f.v*sp;
+        if(sp>0.04){clip='walk';ts=Math.max(0.2,real/f.v*(f.kind==='walk'?1:1))}else{clip=f.rest_c[k%2];ts=1}
+        const fx=Math.sin(yaw)*0.6,fz=Math.cos(yaw)*0.6,hf=heightAt(x+fx,z+fz),hb=heightAt(x-fx,z-fz);
+        y=(hf+hb)/2-0.03;pit=Math.atan2(hb-hf,1.2)*0.9;
+      }else if(f.kind==='fish'){
+        const ph=f.ph+f.spd*(W+f.t0);x=f.hx+Math.cos(ph)*f.r;z=f.hz+Math.sin(ph)*f.r;
+        const dxc=x-cam.x,dzc=z-cam.z;if(dxc*dxc+dzc*dzc>130*130){f.g.visible=false;continue}
+        const sg=f.spd>0?1:-1;yaw=Math.atan2(-Math.sin(ph)*sg,Math.cos(ph)*sg)-Math.PI/2;y=f.y;clip='swim';ts=1+Math.abs(f.spd)*1.5;
+      }else{
+        const cyc=f.F+f.G,tt=W+f.t0,k=Math.floor(tt/cyc),s=tt-k*cyc,sg=f.sg,L=f.L,gy=Math.max(heightAt(L[0],L[1]),-0.2),y0=Math.atan2(-Math.sin(f.ph)*sg,Math.cos(f.ph)*sg);
+        rot='YZX';
+        if(s<f.F){
+          const dist=cycDist(s,f.F,f.ramp,f.v),ph=f.ph+sg*dist/f.r;x=f.c[0]+Math.cos(ph)*f.r;z=f.c[1]+Math.sin(ph)*f.r;
+          const gh=Math.max(heightAt(x,z),0),up=sst(0,1,s/f.ramp)*sst(0,1,(f.F-s)/f.ramp);
+          y=gy+(f.alt-gy)*up+Math.sin(W*0.4+ph*2)*1.2*up;y=Math.max(y,gh+1.5*sst(0,0.5,up));
+          yaw=Math.atan2(-Math.sin(ph)*sg,Math.cos(ph)*sg);bank=-0.25*sg*up;
+          if(s<3)clip='takeoff';else if(s>f.F-3.5){clip='land';bank*=0.3}
+          else{const s2=tt%(f.flap+f.glide);if(s2<f.flap){clip='fly';ts=0.9+0.2*Math.sin(tt*0.7)}else clip='glide'}
+        }else{
+          const u=(s-f.F)/f.G*32,evn=(k+f.order)%2===0,A=evn?'strike':'preen',B=evn?'preen':'strike';
+          let off=0,turn=0;clip='stand';
+          const wl=q=>Math.max(0.3,Math.min(1.5,1.4*6*q*(1-q)/3/0.5));
+          if(u<7)clip='stand';
+          else if(u<10){clip='walk';const q=(u-7)/3;off=1.4*sst(0,1,q);ts=wl(q)}
+          else if(u<14){off=1.4;clip=A}
+          else if(u<18){off=1.4}
+          else if(u<22){off=1.4;clip=B}
+          else if(u<23.5){off=1.4;turn=Math.PI*sst(0,1,(u-22)/1.5)}
+          else if(u<26.5){clip='walk';turn=Math.PI;const q=(u-23.5)/3;off=1.4*(1-sst(0,1,q));ts=wl(q)}
+          else if(u<28.5){turn=Math.PI*(1-sst(0,1,(u-26.5)/2))}
+          yaw=y0+turn;x=L[0]+Math.sin(y0)*off;z=L[1]+Math.cos(y0)*off;y=Math.max(heightAt(x,z),-0.2)-0.02;
+        }
+        const dxc=x-cam.x,dzc=z-cam.z;if(dxc*dxc+dzc*dzc>260*260){f.g.visible=false;continue}
+      }
+      f.g.visible=true;f.g.rotation.order=rot;f.g.position.set(x,y,z);f.g.rotation.y=yaw;f.g.rotation.x=pit;f.g.rotation.z=bank;
+      gfPlay(f,clip,ts,0.4);f.mx.update(dt);
+    }
+  });
+  window.__fauna=GF;
   /* ================= things to find, hold, eat and give ================= */
   say('Hiding the fruit');await tick();
   const ANI_CODE={rabbit:101,chicken:102,duck:103,hedgehog:104,kit:105},ANI_NAME={101:['Rabbit','🐇'],102:['Chicken','🐔'],103:['Duck','🦆'],104:['Hedgehog','🦔'],105:['Fox kit','🦊']};
@@ -2785,18 +2882,50 @@ async function build(){
     engA.o.frequency.setTargetAtTime(fr,t,0.05);engA.o2.frequency.setTargetAtTime(fr*0.5,t,0.05);
     engA.f.frequency.setTargetAtTime(380+s*38,t,0.08);engA.g.gain.setTargetAtTime(0.035+0.03*Math.abs(thr)+0.004*Math.min(s,20),t,0.08);
   }
-  /* HUD */
-  const carHud=document.createElement('div');
-  carHud.style.cssText='position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:none;align-items:center;gap:12px;padding:8px 14px;border-radius:999px;background:rgba(10,24,34,.62);color:#fff;font:600 15px system-ui,sans-serif;z-index:30;backdrop-filter:blur(6px)';
-  carHud.innerHTML='<span><b id="kmh" style="font-size:22px">0</b> km/h</span><button id="carExit" type="button" style="font:600 14px system-ui;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:8px 14px;min-height:40px">Exit</button><span style="opacity:.7;font-weight:500;font-size:12px">W/S or stick · A/D steer · Space brake</span>';
+  /* BGMI-style driving controls: steer arrows bottom-left, brake + accelerator pedals bottom-right, handbrake, horn, get-off, speed gauge */
+  const dui={L:0,R:0,gas:0,brk:0,hb:0,horn:0};
+  {const st=document.createElement('style');
+  st.textContent=`body.drv #stick,body.drv #flyBtn,body.drv #runBtn,body.drv #emoBtn,body.drv #jumpBtn,body.drv #grabBtn,body.drv #orbBtn,body.drv #bagBtn,body.drv #grabHint,body.drv #viewBtn{display:none!important}
+#carUI{position:fixed;inset:0;z-index:31;display:none;pointer-events:none;touch-action:none;font-family:system-ui,sans-serif;color:#fff}
+#carUI button{pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border:1.5px solid rgba(255,255,255,.38);background:rgba(12,22,30,.5);color:#fff;backdrop-filter:blur(6px);display:grid;place-items:center;padding:0;cursor:pointer;transition:transform .06s,background .06s}
+#carUI button.on{background:rgba(255,176,56,.82);color:#1b1206;transform:scale(.94)}
+#carUI svg{width:46%;height:46%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+#carUI .cl{position:absolute;left:max(18px,env(safe-area-inset-left,0px));bottom:max(18px,env(safe-area-inset-bottom,0px));display:flex;gap:18px}
+#carUI .cl button{width:96px;height:96px;border-radius:50%}
+#carUI .cr{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:max(18px,env(safe-area-inset-bottom,0px));display:flex;align-items:flex-end;gap:14px}
+#carUI .col{display:flex;flex-direction:column;gap:12px;align-items:center}
+#carUI #cgas{width:96px;height:156px;border-radius:30px}
+#carUI #cbrk{width:92px;height:116px;border-radius:28px}
+#carUI .sm{width:60px;height:60px;border-radius:50%}
+#carUI #cexit{position:absolute;right:max(18px,env(safe-area-inset-right,0px));top:calc(78px + env(safe-area-inset-top,0px));height:44px;padding:0 16px;border-radius:999px;font:600 14px system-ui;display:flex;gap:8px;align-items:center}
+#carUI #cexit svg{width:20px;height:20px}
+#carUI #cspd{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:168px;text-align:center;pointer-events:none}
+#carUI #cspd svg{width:168px;height:96px;stroke:none;fill:none}
+#carUI #cspd b{position:absolute;left:0;right:0;bottom:22px;font:700 34px/1 system-ui;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+#carUI #cspd small{position:absolute;left:0;right:0;bottom:6px;font:600 11px system-ui;letter-spacing:.12em;opacity:.8}`;
+  document.head.appendChild(st)}
+  const carHud=document.createElement('div');carHud.id='carUI';
+  carHud.innerHTML=`<div class="cl"><button type="button" data-k="L" aria-label="Steer left"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" data-k="R" aria-label="Steer right"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
+<button type="button" id="cexit" aria-label="Get out of the jeep"><svg viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg>Get off</button>
+<div id="cspd"><svg viewBox="0 0 168 96"><path d="M14 90A70 70 0 0 1 154 90" stroke="rgba(255,255,255,.22)" stroke-width="9" fill="none" stroke-linecap="round"/><path id="carc" d="M14 90A70 70 0 0 1 154 90" stroke="#ffb038" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="0 400"/></svg><b id="kmh">0</b><small>KM/H</small></div>
+<div class="cr"><div class="col"><button type="button" class="sm" data-k="hb" aria-label="Handbrake"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M10 16V8h3a2.2 2.2 0 0 1 0 4.4h-3"/></svg></button><button type="button" id="cbrk" data-k="brk" aria-label="Brake and reverse"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="3"/><path d="M9 9h6M9 12h6M9 15h6"/></svg></button></div><div class="col"><button type="button" class="sm" data-k="horn" aria-label="Horn"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l5 4V6L7 10H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button><button type="button" id="cgas" data-k="gas" aria-label="Accelerator"><svg viewBox="0 0 24 24"><path d="M6 14l6-6 6 6M6 19l6-6 6 6"/></svg></button></div></div>`;
   document.body.appendChild(carHud);
-  carHud.querySelector('#carExit').addEventListener('click',()=>exitCar());
-  const kmhEl=carHud.querySelector('#kmh');
+  carHud.querySelectorAll('button[data-k]').forEach(b=>{
+    const k=b.dataset.k,on=e=>{e.preventDefault();dui[k]=1;b.classList.add('on');try{b.setPointerCapture(e.pointerId)}catch(x){}},off=()=>{dui[k]=0;b.classList.remove('on')};
+    b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);b.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+  carHud.querySelector('#cexit').addEventListener('click',()=>exitCar());
+  const kmhEl=carHud.querySelector('#kmh'),arcEl=carHud.querySelector('#carc');
+  let hornA=null;
+  function hornSet(on){
+    if(on&&!hornA&&ac){try{const g=ac.createGain(),o1=ac.createOscillator(),o2=ac.createOscillator();o1.type=o2.type='square';o1.frequency.value=392;o2.frequency.value=494;g.gain.value=0.0;g.gain.setTargetAtTime(0.07,ac.currentTime,0.01);o1.connect(g);o2.connect(g);g.connect(ac.destination);o1.start();o2.start();hornA={g,o1,o2}}catch(e){hornA=null}}
+    else if(!on&&hornA){const h=hornA;hornA=null;try{h.g.gain.setTargetAtTime(0,ac.currentTime,0.02);setTimeout(()=>{try{h.o1.stop();h.o2.stop();h.g.disconnect()}catch(e){}},150)}catch(e){}}
+  }
   function enterCar(c){
     if(drv||c.by)return;
     if(flying)setFly(false);if(orb.on)setOrbit(false);if(hand)dropHand(true);
     drv={c,cam:new THREE.Vector3(),first:true,thr:0};c.by='me';c.hit=0;vx=vz=0;
-    carLamps(hours<6.3||hours>18.5);engStart();carHud.style.display='flex';
+    carLamps(hours<6.3||hours>18.5);engStart();carHud.style.display='block';document.body.classList.add('drv');joy.x=joy.y=0;for(const k in dui)dui[k]=0;
     $('#grabHint').classList.add('off');
   }
   function exitCar(){
@@ -2808,21 +2937,21 @@ async function build(){
     }
     if(!ok){ex=c.x+cy*2.3;ez=c.z-sy*2.3}
     P.x=ex;P.z=ez;yaw=c.yaw;pitch=-0.04;vx=vz=vy=0;off=0;gS=groundAt(ex,ez);
-    c.by=null;c.vx*=0.2;c.vz*=0.2;drv=null;engStop();carHud.style.display='none';carLamps(false);
+    c.by=null;c.vx*=0.2;c.vz*=0.2;drv=null;engStop();hornSet(false);carHud.style.display='none';document.body.classList.remove('drv');carLamps(false);
     if(myAv)myAv.userData.drv=0;
     toast('Parked. Walk up to a jeep and press Grab to drive.');
   }
   function driveWalk(dt){
     const d=drv,c=d.c;
-    let thr=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-joy.y;
-    let st=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+joy.x;
+    let thr=(keys.has('KeyW')||keys.has('ArrowUp')||dui.gas?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')||dui.brk?1:0);
+    let st=(keys.has('KeyD')||keys.has('ArrowRight')||dui.R?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')||dui.L?1:0);
     thr=clamp(thr,-1,1);st=clamp(st,-1,1);
-    const hb=jumpHeld||keys.has('Space');
+    const hb=jumpHeld||keys.has('Space')||!!dui.hb;hornSet(!!dui.horn||keys.has('KeyH'));
     const vF=stepCar(c,dt,thr,st,hb);
     carVisual(c,dt,vF);d.thr=thr;engUpdate(vF,thr);
-    kmhEl.textContent=Math.round(Math.abs(vF)*3.6);
+    {const kh=Math.abs(vF)*3.6;kmhEl.textContent=Math.round(kh);arcEl.setAttribute('stroke-dasharray',(Math.min(1,kh/130)*220)+' 400')}
     P.x=c.x;P.z=c.z;gS=c.y;eyeV.set(c.x,c.y+1.7,c.z);
-    carLamps(hours<6.3||hours>18.5);
+    carLamps(hours<6.3||hours>18.5);if(thr<0&&vF>0.5||hb)carTailMat.color.setHex(0xff3a24);
     /* chase camera */
     if(lookId===null)yaw+=angDiff(c.yaw,yaw)*(1-Math.exp(-dt*(1.8+Math.abs(vF)*0.06)));
     pitch+=(-0.2-pitch)*(1-Math.exp(-dt*(lookId===null?2:0)));
