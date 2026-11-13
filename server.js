@@ -1,7 +1,7 @@
 // Verdant Reach online server — zero dependencies. Serves the game and relays
 // player positions + voice-chat signalling between people in the same room code.
 const http = require('http'), fs = require('fs'), path = require('path');
-const PORT = process.env.PORT || 3000, PUB = __dirname, HIDDEN = new Set(['server.js','package.json','README.md','package-lock.json','accounts.json']), MAX = 8;
+const PORT = process.env.PORT || 3000, PUB = __dirname, HIDDEN = new Set(['server.js','package.json','README.md','package-lock.json','accounts.json','gsaves.json']), MAX = 8;
 const MIME = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon','.glb':'model/gltf-binary','.jpg':'image/jpeg'};
 const rooms = new Map(); // code -> Map(id -> {res, p, s})
 const clean = (v, n) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, n);
@@ -113,7 +113,35 @@ function auth(req, res, p) {
 
 
 // ---- WebSocket relay for the Godot version: /ws?room=CODE&id=ID  (JSON text = state/profile, binary = voice)
+const GS_FILE = path.join(process.env.DATA_DIR || __dirname, 'gsaves.json');
+let GS = {}; try { GS = JSON.parse(fs.readFileSync(GS_FILE, 'utf8')); } catch (e) {}
+let gsTimer = null;
+const gsFlush = () => { gsTimer = null; try { fs.writeFileSync(GS_FILE, JSON.stringify(GS)); } catch (e) {} };
+const gsLater = () => { if (!gsTimer) gsTimer = setTimeout(gsFlush, 5000); };
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', gRooms = new Map(), DAY = 600;
+// Public lobbies (room code azreth1, azreth2, ...) are "big" rooms: up to BIG_MAX players, and each player is only sent the
+// players near them (area of interest). Other room codes stay small private rooms (MAX players, everyone sees everyone).
+const BIG_RE = /^azreth\d+$/, BIG_MAX = 300, AOI_IN = 250, AOI_OUT = 320;
+setInterval(() => {
+  for (const room of gRooms.values()) {
+    if (!room.big) continue;
+    const list = [...room.peers.values()].filter(c => c.s);
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j], dx = a.s[0] - b.s[0], dz = a.s[2] - b.s[2], d2 = dx * dx + dz * dz;
+      if (!a.vis.has(b)) {
+        if (d2 < AOI_IN * AOI_IN) {
+          a.vis.add(b); b.vis.add(a);
+          if (b.p) wsText(a, { t: 'join', id: b.id, p: b.p }); wsText(a, { t: 's', id: b.id, s: b.s });
+          if (a.p) wsText(b, { t: 'join', id: a.id, p: a.p }); wsText(b, { t: 's', id: a.id, s: a.s });
+        }
+      } else if (d2 > AOI_OUT * AOI_OUT) {
+        a.vis.delete(b); b.vis.delete(a);
+        wsText(a, { t: 'leave', id: b.id, far: 1 }); wsText(b, { t: 'leave', id: a.id, far: 1 });
+      }
+    }
+  }
+}, 500);
+setInterval(() => { for (const room of gRooms.values()) if (room.big) for (const c of room.peers.values()) wsText(c, { t: 'pop', n: room.peers.size }); }, 5000);
 function wsFrame(op, data) {
   const n = data.length; let h;
   if (n < 126) h = Buffer.from([0x80 | op, n]);
@@ -121,7 +149,7 @@ function wsFrame(op, data) {
   else { h = Buffer.alloc(10); h[0] = 0x80 | op; h[1] = 127; h.writeUInt32BE(n, 6); }
   return Buffer.concat([h, data]);
 }
-const wsText = (c, o) => { if (!c.sock.destroyed) c.sock.write(wsFrame(1, Buffer.from(JSON.stringify(o)))); };
+const wsText = (c, o) => { if (!c.sock.destroyed && !(o.t === 's' && c.sock.writableLength > 1 << 20)) c.sock.write(wsFrame(1, Buffer.from(JSON.stringify(o)))); };
 const wsBin = (c, b) => { if (!c.sock.destroyed && c.sock.writableLength < 262144) c.sock.write(wsFrame(2, b)); };
 function wsUpgrade(req, sock) {
   const u = new URL(req.url, 'http://x');
@@ -130,26 +158,41 @@ function wsUpgrade(req, sock) {
   const code = clean(u.searchParams.get('room'), 16), id = clean(u.searchParams.get('id'), 12);
   if (!code || !id) return sock.destroy();
   sock.on('error', () => {});
+  const kraw = String(u.searchParams.get('k') || '').slice(0, 64);
+  const kh = kraw.length >= 16 ? crypto.createHash('sha256').update(kraw).digest('hex') : '';
+  const rec = GS[id];
+  if (kh && rec && rec.kh && rec.kh !== kh) {   // id already belongs to another device
+    sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' +
+      crypto.createHash('sha1').update(key + GUID).digest('base64') + '\r\n\r\n');
+    wsText({ sock }, { t: 'taken' }); sock.end(); return;
+  }
+  if (kh && !rec) { GS[id] = { kh, d: null, t: Date.now() }; gsLater(); }
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' +
     crypto.createHash('sha1').update(key + GUID).digest('base64') + '\r\n\r\n');
   sock.setNoDelay(true);
   let room = gRooms.get(code);
-  if (!room) gRooms.set(code, room = { peers: new Map(), t0: Date.now(), tod0: 0.31 });
-  const me = { sock, id, p: null, s: null };
-  if (room.peers.size >= MAX && !room.peers.has(id)) { wsText(me, { t: 'full' }); sock.end(); return; }
-  const old = room.peers.get(id); if (old) old.sock.destroy();
+  if (!room) gRooms.set(code, room = { peers: new Map(), t0: Date.now(), tod0: 0.31, big: BIG_RE.test(code) });
+  const me = { sock, id, kh, p: null, s: null, vis: new Set(), lastSave: 0 };
+  if (room.peers.size >= (room.big ? BIG_MAX : MAX) && !room.peers.has(id)) { wsText(me, { t: 'full' }); sock.end(); return; }
+  const old = room.peers.get(id); if (old && (!kh || !old.kh || old.kh === kh)) old.sock.destroy(); else if (old) { wsText(me, { t: 'taken' }); sock.end(); return; }
   const tod = () => (room.tod0 + (Date.now() - room.t0) / 1000 / DAY) % 1;
-  const others = fn => { for (const [k, c] of room.peers) if (k !== id) fn(c); };
+  const others = fn => { if (room.big) { for (const c of me.vis) fn(c); } else for (const [k, c] of room.peers) if (k !== id) fn(c); };
   room.peers.set(id, me);
-  wsText(me, { t: 'hello', you: id, tod: tod(), peers: [...room.peers.values()].filter(c => c !== me).map(c => ({ id: c.id, p: c.p, s: c.s })) });
+  wsText(me, { t: 'hello', you: id, save: (GS[id] && GS[id].kh === kh) ? GS[id].d : null, tod: tod(), peers: room.big ? [] : [...room.peers.values()].filter(c => c !== me).map(c => ({ id: c.id, p: c.p, s: c.s })) });
   const idb = Buffer.from(id);
   const handle = (op, d) => {
     if (op === 2) {
       if (d.length < 2 || d.length > 4000) return;
       const out = Buffer.concat([Buffer.from([idb.length]), idb, d]);
       others(c => wsBin(c, out));
-    } else if (op === 1 && d.length < 4000) {
+    } else if (op === 1 && d.length < 24000) {
       let m; try { m = JSON.parse(d.toString()); } catch (e) { return; }
+      if (m.t === 'save') {   // progress backup (own device only, max once per 8 s, 20 KB)
+        const R = GS[id], js = JSON.stringify(m.d || null);
+        if (kh && R && R.kh === kh && js.length < 20000 && Date.now() - me.lastSave > 8000) { me.lastSave = Date.now(); R.d = m.d; R.t = Date.now(); gsLater(); }
+        return;
+      }
+      if (d.length >= 4000) return;
       if (m.t === 's' && Array.isArray(m.s)) { me.s = m.s.slice(0, 10).map(Number); others(c => wsText(c, { t: 's', id, s: me.s })); }
       else if (m.t === 'ev' && m.d && JSON.stringify(m.d).length < 400) { others(c => wsText(c, { t: 'ev', id, d: m.d })); }
       else if (m.t === 'p' && m.p && JSON.stringify(m.p).length < 1500) { const first = !me.p; me.p = m.p; others(c => wsText(c, { t: first ? 'join' : 'p', id, p: me.p })); }
@@ -181,7 +224,8 @@ function wsUpgrade(req, sock) {
   const tm = setInterval(() => wsText(me, { t: 'time', v: tod() }), 15000);
   sock.on('close', () => {
     clearInterval(ping); clearInterval(tm);
-    if (room.peers.get(id) === me) { room.peers.delete(id); others(c => wsText(c, { t: 'leave', id })); if (!room.peers.size) gRooms.delete(code); }
+    for (const c of me.vis) c.vis.delete(me);
+    if (room.peers.get(id) === me) { room.peers.delete(id); for (const c of me.vis) wsText(c, { t: 'leave', id }); if (!room.big) for (const [k, c] of room.peers) if (!me.vis.has(c)) wsText(c, { t: 'leave', id }); if (!room.peers.size) gRooms.delete(code); }
   });
 }
 
